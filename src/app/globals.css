@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: #fff8ef;
+  --surface: #ffffff;
+  --surface-muted: #fbefe0;
+  --foreground: #2a1f16;
+  --muted: #74624f;
+  --border: #ecdcc6;
+  --tomato: #e0492f;
+  --tomato-strong: #c23a22;
+  --tomato-soft: #fde3dc;
+  --mustard: #f0ad2b;
+  --mustard-soft: #fdf0cf;
+  --basil: #2f8a4f;
+  --basil-soft: #dcf1e2;
+  --plum: #7a4bb5;
+  --plum-soft: #ece2f8;
+  --ring: #e0492f66;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1b1510;
+    --surface: #251d16;
+    --surface-muted: #2f251c;
+    --foreground: #f6ece0;
+    --muted: #bfae98;
+    --border: #3d3126;
+    --tomato: #f0664c;
+    --tomato-strong: #ff7d63;
+    --tomato-soft: #4a221a;
+    --mustard: #f5bd4f;
+    --mustard-soft: #43351a;
+    --basil: #5cc07f;
+    --basil-soft: #1e3a27;
+    --plum: #b58ae8;
+    --plum-soft: #34264a;
+    --ring: #f0664c77;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-tomato: var(--tomato);
+  --color-tomato-strong: var(--tomato-strong);
+  --color-tomato-soft: var(--tomato-soft);
+  --color-mustard: var(--mustard);
+  --color-mustard-soft: var(--mustard-soft);
+  --color-basil: var(--basil);
+  --color-basil-soft: var(--basil-soft);
+  --color-plum: var(--plum);
+  --color-plum-soft: var(--plum-soft);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-nunito);
+  --font-display: var(--font-fredoka);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-fredoka);
+  letter-spacing: -0.01em;
+}
+
+@media print {
+  :root {
+    --background: #ffffff;
+    --surface: #ffffff;
+    --foreground: #000000;
+    --muted: #444444;
+    --border: #cccccc;
+  }
+  .no-print {
+    display: none !important;
+  }
+  body {
+    font-size: 11pt;
+  }
 }
