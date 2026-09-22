@@ -5,6 +5,8 @@ import { formatDay } from "@/lib/plan/week";
 import { daysBetween, todayIn } from "@/lib/presence";
 import { withNames } from "@/lib/restaurants/names";
 import { lastOrdered, listRestaurants } from "@/lib/restaurants/store";
+import { restaurantWeight, usualOrder } from "@/lib/restaurants/favorites";
+import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { TakeoutSpinner } from "./takeout-spinner";
 
@@ -17,6 +19,9 @@ export default async function SpinPage({ searchParams }: PageProps<"/takeout/spi
   const date = typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today;
   const [restaurants, members, last] = await Promise.all([listRestaurants(db), getActiveMembers(), lastOrdered(db)]);
   const names = new Map(members.map((m) => [m.id, m.name]));
+  const [eaterContext, meals] = await Promise.all([loadEaterContext(db, date, date), loadMeals(db, date, date)]);
+  const eaters = eatersFor(eaterContext, date, meals.get(date)?.eaterIds);
+  const eaterIds = eaters.map((m) => m.id);
 
   if (restaurants.length < 2) {
     return (
@@ -53,6 +58,10 @@ export default async function SpinPage({ searchParams }: PageProps<"/takeout/spi
             recentDays: lastDate ? daysBetween(lastDate, today) : null,
             picks: r.research?.picks ?? [],
             familyOrder: withNames(r.research?.familyOrder ?? null, r.research?.labels, names),
+            weight: restaurantWeight(r.favorites, eaterIds),
+            meh: eaters.filter((m) => r.favorites?.people[m.id]?.feeling === "meh").map((m) => m.name),
+            loves: eaters.filter((m) => r.favorites?.people[m.id]?.feeling === "love").map((m) => m.name),
+            usual: r.favorites ? usualOrder(r.favorites, eaters.map((m) => ({ id: m.id, name: m.name }))) : null,
           };
         })}
         members={members.map((m) => ({ id: m.id, name: m.name, emoji: m.avatarEmoji, color: m.avatarColor }))}

@@ -477,6 +477,15 @@ export type RestaurantResearch = {
   labels?: Record<string, string>;
 };
 
+/** How someone feels about a restaurant overall. */
+export type RestaurantFeeling = "love" | "fine" | "meh";
+
+/** The family's usual order: each person's go-to dishes, plus things for the table. */
+export type RestaurantFavorites = {
+  people: Record<string, { dishes: string[]; feeling: RestaurantFeeling | null }>;
+  shared: string[];
+};
+
 export const restaurant = pgTable("restaurant", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -487,6 +496,7 @@ export const restaurant = pgTable("restaurant", {
   phone: text("phone"),
   notes: text("notes"),
   research: jsonb("research").$type<RestaurantResearch>(),
+  favorites: jsonb("favorites").$type<RestaurantFavorites>(),
   researchedAt: timestamp("researched_at", { withTimezone: true }),
   researchError: text("research_error"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),

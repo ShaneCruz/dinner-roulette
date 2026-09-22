@@ -6,6 +6,7 @@ import { Avatar, Button, Card, cx } from "@/components/ui";
 import { Wheel, type WheelItem } from "@/components/wheel";
 import type { RestaurantPick } from "@/db/schema";
 import { cuisineEmoji } from "@/lib/cuisine-emoji";
+import { weightedIndex } from "@/lib/restaurants/favorites";
 import { orderFrom } from "../actions";
 
 type Place = {
@@ -15,6 +16,11 @@ type Place = {
   recentDays: number | null;
   picks: RestaurantPick[];
   familyOrder: string | null;
+  /** How likely the wheel lands here, from how the people eating feel about it */
+  weight: number;
+  meh: string[];
+  loves: string[];
+  usual: { lines: { dish: string; count: number; who: string[] }[]; shared: string[]; missing: string[] } | null;
 };
 type Member = { id: string; name: string; emoji: string; color: string };
 
@@ -39,9 +45,8 @@ export function TakeoutSpinner({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const items: WheelItem[] = restaurants
-    .filter((r) => included.includes(r.id))
-    .map((r) => ({ id: r.id, label: r.name, emoji: cuisineEmoji(r.cuisine) }));
+  const onWheel = restaurants.filter((r) => included.includes(r.id));
+  const items: WheelItem[] = onWheel.map((r) => ({ id: r.id, label: r.name, emoji: cuisineEmoji(r.cuisine) }));
 
   return (
     <div className="space-y-6">
@@ -60,6 +65,8 @@ export function TakeoutSpinner({
               )}
             >
               {cuisineEmoji(r.cuisine)} {r.name}
+              {r.loves.length ? <span className="ml-1" title={`${r.loves.join(", ")} love it`}>😍</span> : null}
+              {r.meh.length ? <span className="ml-1" title={`${r.meh.join(", ")} isn't a fan`}>😕</span> : null}
               {r.recentDays !== null && r.recentDays <= 7 ? (
                 <span className="ml-1 text-xs font-normal">
                   ({r.recentDays === 0 ? "today" : `${r.recentDays}d ago`})
@@ -70,8 +77,19 @@ export function TakeoutSpinner({
         })}
       </div>
 
+      {onWheel.some((r) => r.meh.length || r.loves.length) ? (
+        <p className="-mt-3 text-xs text-muted">
+          😍 places come up more often, 😕 ones less.{" "}
+          {onWheel
+            .filter((r) => r.meh.length)
+            .map((r) => `${r.meh.join(" & ")} ${r.meh.length > 1 ? "aren't" : "isn't"} big on ${r.name}.`)
+            .join(" ")}
+        </p>
+      ) : null}
+
       <Wheel
         items={items}
+        pickIndex={() => weightedIndex(onWheel.map((r) => r.weight))}
         spinLabel={winner ? "Spin again" : "🎡 Spin!"}
         onResult={(item) => {
           setSaved(false);
@@ -86,7 +104,27 @@ export function TakeoutSpinner({
           <h2 className="mt-1 text-3xl font-bold">
             {cuisineEmoji(winner.cuisine)} {winner.name}
           </h2>
-          {winner.picks.length ? (
+          {winner.usual && (winner.usual.lines.length || winner.usual.shared.length) ? (
+            <div className="mt-3 rounded-2xl bg-surface p-3">
+              <p className="text-sm font-bold">Your usual</p>
+              <ul className="mt-1 text-sm">
+                {winner.usual.lines.map((l) => (
+                  <li key={l.dish}>
+                    {l.count > 1 ? `${l.count}× ` : ""}
+                    {l.dish} <span className="text-muted">({l.who.join(", ")})</span>
+                  </li>
+                ))}
+                {winner.usual.shared.map((s) => (
+                  <li key={s}>
+                    {s} <span className="text-muted">(to share)</span>
+                  </li>
+                ))}
+              </ul>
+              {winner.usual.missing.length ? (
+                <p className="mt-1 text-xs text-muted">No usual yet for {winner.usual.missing.join(", ")}. Tap &quot;Help me choose&quot; on the order page.</p>
+              ) : null}
+            </div>
+          ) : winner.picks.length ? (
             <ul className="mt-4 space-y-2">
               {members.map((m) => {
                 const pick = winner.picks.find((p) => p.memberId === m.id);
@@ -130,7 +168,7 @@ export function TakeoutSpinner({
               )
             ) : null}
             <Link href={`/takeout/${winner.id}`} className="inline-flex h-11 items-center px-3 font-semibold text-tomato">
-              Full menu picks →
+              Order &amp; help me choose →
             </Link>
           </div>
           {error ? <p className="mt-2 text-sm text-tomato-strong">{error}</p> : null}
