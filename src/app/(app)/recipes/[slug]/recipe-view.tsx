@@ -151,7 +151,7 @@ export function RecipeView({
                 </button>
                 <div className={cx("flex-1 pt-1", doneSteps.has(index) && "text-muted line-through")}>
                   <p className="leading-relaxed">{step.text}</p>
-                  {step.timerMinutes ? <StepTimer minutes={step.timerMinutes} /> : null}
+                  {step.timerMinutes ? <StepTimer minutes={step.timerMinutes} label={step.text} /> : null}
                 </div>
               </li>
             ))}
@@ -237,9 +237,10 @@ function VariantCard({ variant, factor }: { variant: ViewVariant; factor: number
   );
 }
 
-function StepTimer({ minutes }: { minutes: number }) {
+function StepTimer({ minutes, label }: { minutes: number; label: string }) {
   const [endsAt, setEndsAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const alarm = useRef<ReturnType<typeof setInterval> | null>(null);
   const rang = useRef(false);
 
   useEffect(() => {
@@ -251,12 +252,30 @@ function StepTimer({ minutes }: { minutes: number }) {
   const remaining = endsAt === null ? minutes * 60_000 : Math.max(0, endsAt - now);
   const finished = endsAt !== null && remaining === 0;
 
+  function stopAlarm() {
+    if (alarm.current) clearInterval(alarm.current);
+    alarm.current = null;
+    if (document.title.startsWith("⏰")) document.title = document.title.replace(/^⏰ Timer done! · /, "");
+  }
+
   useEffect(() => {
-    if (finished && !rang.current) {
-      rang.current = true;
-      ding();
-    }
-  }, [finished]);
+    if (!finished || rang.current) return;
+    rang.current = true;
+    // Keep ringing until someone taps Done (up to about two minutes).
+    let rings = 0;
+    beep();
+    navigator.vibrate?.([400, 200, 400, 200, 400]);
+    alarm.current = setInterval(() => {
+      rings += 1;
+      beep();
+      navigator.vibrate?.([400, 200, 400]);
+      if (rings >= 45) stopAlarm();
+    }, 2500);
+    if (!document.title.startsWith("⏰")) document.title = `⏰ Timer done! · ${document.title}`;
+    notify(label);
+  }, [finished, label]);
+
+  useEffect(() => () => stopAlarm(), []);
 
   const mm = Math.floor(remaining / 60_000);
   const ss = Math.floor((remaining % 60_000) / 1000)
@@ -268,7 +287,7 @@ function StepTimer({ minutes }: { minutes: number }) {
       <span
         className={cx(
           "rounded-full px-3 py-1 font-mono text-sm font-semibold",
-          finished ? "animate-pulse bg-tomato text-white" : "bg-surface-muted",
+          finished ? "animate-pulse bg-tomato text-white" : endsAt ? "bg-mustard-soft" : "bg-surface-muted",
         )}
       >
         ⏲ {mm}:{ss}
@@ -278,6 +297,10 @@ function StepTimer({ minutes }: { minutes: number }) {
           type="button"
           className="text-sm font-semibold text-tomato"
           onClick={() => {
+            // Unlock sound now, during the tap; phones block audio that
+            // starts later without one.
+            unlockAudio();
+            askForNotifications();
             rang.current = false;
             setNow(Date.now());
             setEndsAt(Date.now() + minutes * 60_000);
@@ -286,22 +309,51 @@ function StepTimer({ minutes }: { minutes: number }) {
           Start timer
         </button>
       ) : (
-        <button type="button" className="text-sm font-semibold text-muted" onClick={() => setEndsAt(null)}>
-          {finished ? "Done" : "Cancel"}
+        <button
+          type="button"
+          className={cx("text-sm font-semibold", finished ? "rounded-full bg-tomato px-3 py-1 text-white" : "text-muted")}
+          onClick={() => {
+            stopAlarm();
+            setEndsAt(null);
+          }}
+        >
+          {finished ? "Done ✓" : "Cancel"}
         </button>
       )}
     </div>
   );
 }
 
-function ding() {
+// One shared audio context, created on the first "Start timer" tap.
+let audioContext: AudioContext | null = null;
+
+function unlockAudio() {
   try {
-    const ctx = new AudioContext();
+    audioContext ??= new AudioContext();
+    if (audioContext.state === "suspended") void audioContext.resume();
+    // A silent blip fully unlocks audio on iOS.
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    gain.gain.value = 0.0001;
+    osc.connect(gain).connect(audioContext.destination);
+    osc.start();
+    osc.stop(audioContext.currentTime + 0.05);
+  } catch {
+    // No audio on this device.
+  }
+}
+
+function beep() {
+  try {
+    audioContext ??= new AudioContext();
+    const ctx = audioContext;
+    if (ctx.state === "suspended") void ctx.resume();
     [0, 0.25, 0.5].forEach((offset) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      osc.type = "square";
       osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + offset);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + offset);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.2);
       osc.connect(gain).connect(ctx.destination);
       osc.start(ctx.currentTime + offset);
@@ -309,6 +361,29 @@ function ding() {
     });
   } catch {
     // Audio isn't available; the pulsing timer still shows it's done.
+  }
+}
+
+function askForNotifications() {
+  try {
+    if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
+  } catch {
+    // Not supported (e.g. iPhone Safari outside the home-screen app).
+  }
+}
+
+/** A system notification, for when the recipe isn't on screen. */
+function notify(step: string) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
+    const body = step.length > 90 ? `${step.slice(0, 87)}…` : step;
+    const options = { body, tag: "dinner-timer", requireInteraction: true } as NotificationOptions;
+    navigator.serviceWorker?.getRegistration().then((registration) => {
+      if (registration) void registration.showNotification("⏰ Timer's done!", options);
+      else new Notification("⏰ Timer's done!", options);
+    });
+  } catch {
+    // Notifications aren't available; the beeping still happens.
   }
 }
 
