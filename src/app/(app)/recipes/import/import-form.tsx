@@ -84,7 +84,7 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
           ? true
           : text.trim().length > 2;
 
-  // A recipe sent from the "Send to Dinner Roulette" button arrives in the
+  // A recipe sent from the "Send to Cruz Meals" button arrives in the
   // address after "#send=". Import it right away.
   useEffect(() => {
     const receive = () => {
@@ -221,7 +221,7 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
           <p className="text-sm text-muted">
             Allrecipes links don&apos;t work here (they block apps).{" "}
             <Link href="/recipes/import/send-button" className="font-semibold text-tomato underline">
-              Set up the “Send to Dinner Roulette” button
+              Set up the “Send to Cruz Meals” button
             </Link>{" "}
             to import from Allrecipes with its star rating.
           </p>

@@ -15,9 +15,9 @@ const body = Nunito_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Dinner Roulette", template: "%s · Dinner Roulette" },
+  title: { default: "Cruz Meals", template: "%s · Cruz Meals" },
   description: "Family dinners, decided. Plans the week, builds the grocery list, and spins the wheel.",
-  applicationName: "Dinner Roulette",
+  applicationName: "Cruz Meals",
   appleWebApp: { capable: true, title: "Cruz Meals", statusBarStyle: "default" },
   // Plain files at the standard addresses: iPhones (especially adding from
   // Chrome) show a letter tile when the icon link carries a query string.

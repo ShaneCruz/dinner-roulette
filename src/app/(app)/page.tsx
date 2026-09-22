@@ -23,6 +23,8 @@ import { dayOfWeek, formatDay } from "@/lib/plan/week";
 import { loadBadgeStats } from "@/lib/fun/badges";
 import { TrophyShelf } from "@/components/trophy-shelf";
 import { listPendingProposals } from "@/lib/recipes/proposals";
+import { loadSetupSteps } from "@/lib/setup-progress";
+import { GettingStarted } from "@/components/getting-started";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { MadeItButton } from "./tonight-actions";
 
@@ -78,7 +80,10 @@ export default async function HomePage() {
     })
     .filter((x) => x.missing.length > 0);
 
-  const tweaks = acting.role === "parent" ? await listPendingProposals(db) : [];
+  const [tweaks, setupSteps] =
+    acting.role === "parent"
+      ? await Promise.all([listPendingProposals(db), loadSetupSteps(db, acting.id)])
+      : [[], null];
 
   // Weekends are for the Sunday session: plan next week together.
   const dow = dayOfWeek(today);
@@ -118,6 +123,8 @@ export default async function HomePage() {
           </div>
         </Card>
       ))}
+
+      {setupSteps ? <GettingStarted steps={setupSteps} /> : null}
 
       {tweaks.length ? (
         <Card className="border-plum/30 bg-plum-soft">

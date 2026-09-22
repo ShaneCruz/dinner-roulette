@@ -1,4 +1,4 @@
-// Dinner Roulette service worker: keeps the grocery list (and recently viewed
+// Cruz Meals service worker: keeps the grocery list (and recently viewed
 // pages) opening in a store with no signal. Changes made offline are queued by
 // the page itself and synced when the connection returns.
 
@@ -80,10 +80,10 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "Dinner Roulette", body: event.data ? event.data.text() : "" };
+    data = { title: "Cruz Meals", body: event.data ? event.data.text() : "" };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || "Dinner Roulette", {
+    self.registration.showNotification(data.title || "Cruz Meals", {
       body: data.body || "",
       tag: data.tag,
       icon: "/icon-192.png",

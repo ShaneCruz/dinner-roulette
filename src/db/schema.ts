@@ -155,6 +155,8 @@ export const member = pgTable(
     /** Where this person is when no availability range says otherwise */
     defaultPresence: presence("default_presence").notNull().default("home"),
     pinHash: text("pin_hash"),
+    /** When this person was shown the welcome for their role */
+    welcomedAt: timestamp("welcomed_at", { withTimezone: true }),
     /** Google account email; parents only */
     authEmail: text("auth_email").unique(),
     sortOrder: integer("sort_order").notNull().default(0),

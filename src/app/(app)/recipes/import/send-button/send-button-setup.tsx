@@ -25,7 +25,7 @@ export function SendButtonSetup() {
             Tap <strong>Copy the button code</strong> below.
           </li>
           <li>
-            Bookmark any page: tap <strong>Share</strong> → <strong>Add Bookmark</strong>, name it <strong>Send to Dinner Roulette</strong>, Save.
+            Bookmark any page: tap <strong>Share</strong> → <strong>Add Bookmark</strong>, name it <strong>Send to Cruz Meals</strong>, Save.
           </li>
           <li>
             Open Bookmarks, tap <strong>Edit</strong>, tap the new bookmark, clear its address and paste the code. Tap Done.
@@ -55,7 +55,7 @@ export function SendButtonSetup() {
             onClick={(e) => e.preventDefault()}
             className="inline-block rounded-full bg-tomato px-4 py-2 font-semibold text-white"
           >
-            🍽️ Send to Dinner Roulette
+            🍽️ Send to Cruz Meals
           </a>
         ) : null}
       </Card>

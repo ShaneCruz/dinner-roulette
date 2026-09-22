@@ -133,7 +133,7 @@ export async function fetchRecipePage(
     throw new PageFetchError(
       response.status === 403
         ? /allrecipes\.com$/.test(url.hostname)
-          ? "Allrecipes blocks apps from reading it. Use the “Send to Dinner Roulette” button on the Allrecipes page instead (see Add a recipe), or take screenshots."
+          ? "Allrecipes blocks apps from reading it. Use the “Send to Cruz Meals” button on the Allrecipes page instead (see Add a recipe), or take screenshots."
           : "That site blocks apps from reading it. Copy and paste the recipe text instead."
         : `That page answered with an error (${response.status}). Try pasting the recipe text instead.`,
     );
