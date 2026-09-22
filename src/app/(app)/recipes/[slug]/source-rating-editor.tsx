@@ -14,7 +14,7 @@ export function SourceRatingEditor({ recipeId, initialSite }: { recipeId: string
   if (!open) {
     return (
       <button type="button" className="text-xs font-semibold text-muted underline" onClick={() => setOpen(true)}>
-        ⭐ Add its rating from Allrecipes
+        ⭐ {initialSite ? "Edit the rating" : "Add its rating from Allrecipes"}
       </button>
     );
   }
