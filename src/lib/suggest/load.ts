@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, isNotNull, isNull, lt, max } from "drizzle-orm";
 import type { Database } from "@/db";
-import { familySettings, memberFoodRule, plannedMeal, recipe, recipeIngredient, recipeVariant } from "@/db/schema";
+import { familySettings, member, memberFoodRule, plannedMeal, recipe, recipeIngredient, recipeVariant } from "@/db/schema";
 import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { addDays } from "@/lib/presence";
 import { averageRatings } from "@/lib/ratings/store";
@@ -60,7 +60,7 @@ export async function loadEngineInputs(db: Database, weekStart: string, options:
   }));
 
   const memberRoles = new Map(
-    (await db.query.member.findMany({ columns: { id: true, role: true } })).map((m) => [m.id, m.role]),
+    (await db.select({ id: member.id, role: member.role }).from(member)).map((m) => [m.id, m.role]),
   );
   const members: EngineMember[] = eaterContext.members.map((m) => ({
     id: m.id,

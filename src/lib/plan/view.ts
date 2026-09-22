@@ -1,4 +1,6 @@
 import { db } from "@/db";
+import { recipe as recipeTable, restaurant } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { presenceOn } from "@/lib/presence";
 import { assignTurns, rankForNight, type Weather } from "@/lib/suggest/engine";
 import { loadEngineInputs } from "@/lib/suggest/load";
@@ -26,6 +28,7 @@ export type NightView = {
   suggestionReason: string | null;
   weather: Weather | null;
   mealId: string | null;
+  restaurantId: string | null;
 };
 
 export type RecipeOption = {
@@ -82,6 +85,7 @@ export async function loadWeekView(weekStart: string) {
       suggestionReason: meal?.suggestionReason ?? null,
       weather: engine.weather.get(date) ?? null,
       mealId: meal?.id ?? null,
+      restaurantId: meal?.restaurantId ?? null,
     };
   });
 
@@ -119,7 +123,7 @@ export async function loadWeekView(weekStart: string) {
   for (const night of nights) {
     for (const id of [night.recipeId, ...night.sideRecipeIds]) {
       if (id && !options.some((o) => o.id === id)) {
-        const missing = await db.query.recipe.findFirst({ where: (r, { eq }) => eq(r.id, id) });
+        const [missing] = await db.select().from(recipeTable).where(eq(recipeTable.id, id)).limit(1);
         if (missing) {
           options.push({
             id: missing.id,
@@ -139,5 +143,7 @@ export async function loadWeekView(weekStart: string) {
   }
   options.sort((a, b) => a.title.localeCompare(b.title));
 
-  return { dates, nights, options, bumped, rankings };
+  const restaurants = await db.select({ id: restaurant.id, name: restaurant.name }).from(restaurant);
+
+  return { dates, nights, options, bumped, rankings, restaurants };
 }

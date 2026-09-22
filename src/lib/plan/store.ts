@@ -5,6 +5,7 @@ import {
   groceryItem,
   member,
   memberAvailability,
+  memberFoodRule,
   plannedMeal,
   recipe,
   weekPlan,
@@ -56,6 +57,7 @@ export type NightPatch = Partial<{
   notes: string | null;
   favoredMemberId: string | null;
   suggestionReason: string | null;
+  restaurantId: string | null;
 }>;
 
 /** Creates or updates the dinner on `date`. Returns the week plan id. */
@@ -162,7 +164,7 @@ export async function loadEaterContext(db: Database, from: string, to: string): 
       .select()
       .from(memberAvailability)
       .where(and(lte(memberAvailability.startDate, to), gte(memberAvailability.endDate, from))),
-    db.query.memberFoodRule.findMany({ where: (r, { eq }) => eq(r.kind, "nope") }),
+    db.select().from(memberFoodRule).where(eq(memberFoodRule.kind, "nope")),
   ]);
   return {
     members: members

@@ -6,16 +6,25 @@ import type { Weather } from "@/lib/suggest/engine";
  * Any failure just means "no weather info"; planning never depends on it.
  */
 
-export async function locateZip(zip: string): Promise<{ latitude: number; longitude: number } | null> {
+export async function locateZip(
+  zip: string,
+): Promise<{ latitude: number; longitude: number; city: string; state: string } | null> {
   try {
     const response = await fetch(`https://api.zippopotam.us/us/${encodeURIComponent(zip)}`, {
       signal: AbortSignal.timeout(4000),
     });
     if (!response.ok) return null;
-    const data = (await response.json()) as { places?: { latitude: string; longitude: string }[] };
+    const data = (await response.json()) as {
+      places?: { latitude: string; longitude: string; "place name": string; "state abbreviation": string }[];
+    };
     const place = data.places?.[0];
     if (!place) return null;
-    return { latitude: Number(place.latitude), longitude: Number(place.longitude) };
+    return {
+      latitude: Number(place.latitude),
+      longitude: Number(place.longitude),
+      city: place["place name"],
+      state: place["state abbreviation"],
+    };
   } catch {
     return null;
   }

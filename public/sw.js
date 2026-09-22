@@ -71,3 +71,16 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(networkFirst(request, PAGES));
   }
 });
+
+// Tapping a timer notification brings the recipe back to the front.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const recipe = windows.find((w) => new URL(w.url).pathname.startsWith("/recipes/")) ?? windows[0];
+      if (recipe) return recipe.focus();
+      return self.clients.openWindow("/");
+    })(),
+  );
+});

@@ -33,6 +33,7 @@ export function PlanBoard({
   options,
   bumped,
   rankings,
+  restaurants,
   weekStart,
   members,
   today,
@@ -43,6 +44,7 @@ export function PlanBoard({
   options: RecipeOption[];
   bumped: Bumped[];
   rankings: Record<string, NightRanking>;
+  restaurants: { id: string; name: string }[];
   weekStart: string;
   members: BoardMember[];
   today: string;
@@ -163,6 +165,7 @@ export function PlanBoard({
               canEdit={canEdit}
               weeknightActiveMinutes={weeknightActiveMinutes}
               otherNights={nights.filter((n) => n.date !== night.date)}
+              restaurantName={restaurants.find((r) => r.id === night.restaurantId)?.name ?? null}
               onPick={() => setPicking(night)}
               run={run}
             />
@@ -205,10 +208,12 @@ function NightCard({
   canEdit,
   weeknightActiveMinutes,
   otherNights,
+  restaurantName,
   onPick,
   run,
 }: {
   night: NightView;
+  restaurantName: string | null;
   recipe: RecipeOption | null;
   sides: RecipeOption[];
   members: BoardMember[];
@@ -330,9 +335,22 @@ function NightCard({
 
       <div className="flex-1">
         {!cooking ? (
-          <p className="py-4 text-center text-2xl font-bold">
-            {NIGHT_TYPES[night.nightType].emoji} {NIGHT_TYPES[night.nightType].label}
-          </p>
+          <div className="py-3 text-center">
+            <p className="text-2xl font-bold">
+              {NIGHT_TYPES[night.nightType].emoji} {NIGHT_TYPES[night.nightType].label}
+            </p>
+            {night.nightType === "takeout" ? (
+              restaurantName && night.restaurantId ? (
+                <Link href={`/takeout/${night.restaurantId}`} className="mt-1 block font-semibold text-tomato">
+                  from {restaurantName} →
+                </Link>
+              ) : (
+                <Link href={`/takeout/spin?date=${night.date}`} className="mt-2 inline-block rounded-full bg-tomato-soft px-4 py-1.5 text-sm font-semibold text-tomato-strong">
+                  🎡 Spin for a place
+                </Link>
+              )
+            ) : null}
+          </div>
         ) : recipe ? (
           <div>
             <Link href={`/recipes/${recipe.slug}`} className="text-xl font-bold leading-tight hover:underline">
