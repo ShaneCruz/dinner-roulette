@@ -98,6 +98,8 @@ export const familySettings = pgTable(
       .notNull()
       .default({ summer: 3, shoulder: 2, winter: 1 }),
     chaosSliceEnabled: boolean("chaos_slice_enabled").notNull().default(true),
+    /** 0 = Sunday … 6 = Saturday; the planning week starts on this day */
+    weekStartsOn: integer("week_starts_on").notNull().default(0),
     setupCompletedAt: timestamp("setup_completed_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -278,4 +280,125 @@ export const recipeVariant = pgTable(
     avoids: text("avoids").array().notNull().default(sql`'{}'::text[]`),
   },
   (t) => [index("recipe_variant_recipe_idx").on(t.recipeId, t.position)],
+);
+
+// ---------------------------------------------------------------------------
+// Planning
+// ---------------------------------------------------------------------------
+
+export const nightType = pgEnum("night_type", [
+  "cook",
+  "leftovers",
+  "takeout",
+  "eating_out",
+  "fend",
+]);
+export const timeBudget = pgEnum("time_budget", ["quick", "normal", "weekend", "hands_off"]);
+export const mealStatus = pgEnum("meal_status", ["planned", "cooked", "skipped"]);
+
+export const weekPlan = pgTable(
+  "week_plan",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** First night of the planning week */
+    weekStart: date("week_start").notNull(),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("week_plan_start_idx").on(t.weekStart)],
+);
+
+/** One dinner per date. */
+export const plannedMeal = pgTable(
+  "planned_meal",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    weekPlanId: uuid("week_plan_id")
+      .notNull()
+      .references(() => weekPlan.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    nightType: nightType("night_type").notNull().default("cook"),
+    recipeId: uuid("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+    sideRecipeIds: uuid("side_recipe_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    /** Who is eating; null means "whoever is home that day" */
+    eaterIds: uuid("eater_ids").array(),
+    /** null means one serving per eater */
+    servings: integer("servings"),
+    timeBudget: timeBudget("time_budget").notNull().default("normal"),
+    status: mealStatus("status").notNull().default("planned"),
+    notes: text("notes"),
+    cookedAt: timestamp("cooked_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("planned_meal_date_idx").on(t.date),
+    index("planned_meal_week_idx").on(t.weekPlanId),
+    index("planned_meal_recipe_idx").on(t.recipeId, t.date),
+  ],
+);
+
+/**
+ * Meals that got skipped but whose groceries were already bought. They wait
+ * here to be dropped onto a later night.
+ */
+export const bumpedMeal = pgTable("bumped_meal", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  recipeId: uuid("recipe_id")
+    .notNull()
+    .references(() => recipe.id, { onDelete: "cascade" }),
+  sideRecipeIds: uuid("side_recipe_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  fromDate: date("from_date").notNull(),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// Groceries
+// ---------------------------------------------------------------------------
+
+export type GrocerySource = { recipeTitle: string; date: string };
+
+export const groceryItem = pgTable(
+  "grocery_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    weekPlanId: uuid("week_plan_id")
+      .notNull()
+      .references(() => weekPlan.id, { onDelete: "cascade" }),
+    /** Stable identity across regenerations: name + unit family */
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    quantity: doublePrecision("quantity"),
+    unit: text("unit").notNull(),
+    section: text("section").notNull(),
+    sources: jsonb("sources").$type<GrocerySource[]>().notNull().default([]),
+    isManual: boolean("is_manual").notNull().default(false),
+    isStaple: boolean("is_staple").notNull().default(false),
+    /** Checked off, then the plan changed so it isn't needed any more */
+    isStale: boolean("is_stale").notNull().default(false),
+    checked: boolean("checked").notNull().default(false),
+    checkedByMemberId: uuid("checked_by_member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("grocery_item_week_key_idx").on(t.weekPlanId, t.key),
+    index("grocery_item_week_idx").on(t.weekPlanId, t.updatedAt),
+  ],
+);
+
+/** "I've got produce": who is shopping which aisle. */
+export const groceryClaim = pgTable(
+  "grocery_claim",
+  {
+    weekPlanId: uuid("week_plan_id")
+      .notNull()
+      .references(() => weekPlan.id, { onDelete: "cascade" }),
+    section: text("section").notNull(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("grocery_claim_idx").on(t.weekPlanId, t.section)],
 );

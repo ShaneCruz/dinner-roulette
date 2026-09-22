@@ -108,6 +108,17 @@ export function SettingsForm({
             ))}
           </div>
         </fieldset>
+        <Field label="The planning week starts on">
+          <select
+            className={inputClass}
+            value={settings.weekStartsOn ?? 0}
+            onChange={(e) => setSettings({ ...settings, weekStartsOn: Number(e.target.value) })}
+          >
+            <option value={0}>Sunday</option>
+            <option value={1}>Monday</option>
+            <option value={6}>Saturday</option>
+          </select>
+        </Field>
         <Toggle
           label="Chaos slice on the wheel (rare surprise results)"
           checked={settings.chaosSliceEnabled}
