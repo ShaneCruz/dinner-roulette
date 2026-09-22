@@ -64,10 +64,10 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
       {acting.role === "parent" && isCurrent ? (
         <p className="mb-4 text-sm text-muted">
           🎲 Want to try something new this week?{" "}
-          <Link href="/recipes/import?mode=surprise" className="font-semibold text-tomato underline">
-            Get a new dinner idea
+          <Link href="/recipes/discover" className="font-semibold text-tomato underline">
+            Swipe through new dinner ideas
           </Link>{" "}
-          based on what your family already likes.
+          picked for your family.
         </p>
       ) : null}
       <PlanBoard

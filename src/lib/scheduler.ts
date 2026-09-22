@@ -5,6 +5,7 @@ import { DEFAULT_REMINDERS, familySettings, member, rating, recipe, recipeIngred
 import { backfillNutrition } from "@/lib/nutrition-store";
 import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { addDays, todayIn } from "@/lib/presence";
+import { finishStuckIdeas } from "@/lib/recipes/ideas";
 import { scanForProposals } from "@/lib/recipes/proposals";
 import { dueReminders, minutesIn, type ReminderMeal } from "@/lib/reminders";
 import { runAutopilot } from "@/lib/suggest/autopilot";
@@ -117,6 +118,7 @@ export async function runScheduledJobs(db: Database, now = new Date()) {
     return made;
   });
 
+  await job("ideas", () => finishStuckIdeas(db, now));
   await job("nutrition", () => backfillNutrition(db, 10));
   return report;
 }

@@ -32,6 +32,9 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
           acting.role === "parent" ? (
             <>
               <ButtonLink href="/recipes/import">📷 Add a recipe</ButtonLink>
+              <ButtonLink href="/recipes/discover" variant="secondary">
+                💘 Discover dinners
+              </ButtonLink>
               <ButtonLink href="/recipes/import?mode=surprise" variant="secondary">
                 🎲 Surprise us
               </ButtonLink>

@@ -39,6 +39,8 @@ export type EngineRecipe = {
   lastCooked: string | null;
   /** Per-serving estimate, when known (display only) */
   nutrition?: Nutrition | null;
+  /** Rating on the site it came from (display only) */
+  sourceRating?: { rating: number | null; count: number | null } | null;
 };
 
 export type EngineMember = {

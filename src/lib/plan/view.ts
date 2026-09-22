@@ -43,6 +43,7 @@ export type RecipeOption = {
   seasonFit: "any" | "warm" | "cold";
   lastCooked: string | null;
   nutrition: Nutrition | null;
+  sourceRating: { rating: number | null; count: number | null } | null;
 };
 
 /** How each dinner fits a given night: score order, best reason, or why not. */
@@ -120,6 +121,7 @@ export async function loadWeekView(weekStart: string) {
     seasonFit: r.seasonFit,
     lastCooked: r.lastCooked,
     nutrition: r.nutrition ?? null,
+    sourceRating: r.sourceRating ?? null,
   }));
   // Drafts and archived recipes aren't suggested, but a night might still use one.
   for (const night of nights) {
@@ -139,6 +141,7 @@ export async function loadWeekView(weekStart: string) {
             seasonFit: missing.seasonFit,
             lastCooked: null,
             nutrition: missing.nutrition,
+            sourceRating: missing.sourceRating !== null ? { rating: missing.sourceRating, count: missing.sourceRatingCount } : null,
           });
         }
       }

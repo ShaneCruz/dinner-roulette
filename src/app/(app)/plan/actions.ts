@@ -150,31 +150,29 @@ async function tonightsMain(date: string) {
   return main ? { meal, main } : null;
 }
 
-/** Suggests sides for a night's dinner: the family's own, plus easy new ideas. */
-export async function recommendSidesAction(date: string): Promise<{ error: string } | { ideas: SideIdea[] }> {
-  await requireParentMember();
-  if (!dateSchema.safeParse(date).success) return { error: "Unknown night." };
-  const found = await tonightsMain(date);
-  if (!found) return { error: "Pick a dinner for that night first." };
+async function suggestSides(
+  main: NonNullable<Awaited<ReturnType<typeof getRecipe>>>,
+  chosenIds: string[],
+): Promise<{ error: string } | { ideas: SideIdea[] }> {
   const sides = await db
     .select({ id: recipeTable.id, slug: recipeTable.slug, title: recipeTable.title, activeMinutes: recipeTable.activeMinutes, healthCategory: recipeTable.healthCategory })
     .from(recipeTable)
     .where(and(eq(recipeTable.kind, "side"), isNull(recipeTable.archivedAt)));
-  const chosen = sides.filter((s) => found.meal.sideRecipeIds.includes(s.id));
+  const chosen = sides.filter((s) => chosenIds.includes(s.id));
 
   if (!aiEnabled()) {
     // Without AI: the sides this dinner pairs with, then the rest.
-    const ranked = [...sides].sort((a, b) => Number(found.main.pairsWith.includes(b.slug)) - Number(found.main.pairsWith.includes(a.slug)));
+    const ranked = [...sides].sort((a, b) => Number(main.pairsWith.includes(b.slug)) - Number(main.pairsWith.includes(a.slug)));
     return {
       ideas: ranked
         .filter((s) => !chosen.some((c) => c.id === s.id))
         .slice(0, 4)
-        .map((s) => ({ existingId: s.id, existingSlug: s.slug, title: s.title, why: found.main.pairsWith.includes(s.slug) ? "A usual pairing" : "From your sides", handsOnMinutes: s.activeMinutes, healthy: s.healthCategory === "healthy" })),
+        .map((s) => ({ existingId: s.id, existingSlug: s.slug, title: s.title, why: main.pairsWith.includes(s.slug) ? "A usual pairing" : "From your sides", handsOnMinutes: s.activeMinutes, healthy: s.healthCategory === "healthy" })),
     };
   }
   try {
     const brief = await loadFamilyBrief(db);
-    const ideas = await recommendSides(found.main, brief, chosen.map((c) => c.title));
+    const ideas = await recommendSides(main, brief, chosen.map((c) => c.title));
     return {
       ideas: ideas.map((idea) => {
         const existing = idea.existingSlug ? sides.find((s) => s.slug === idea.existingSlug) : undefined;
@@ -185,6 +183,24 @@ export async function recommendSidesAction(date: string): Promise<{ error: strin
     console.error("Side suggestions failed", error);
     return { error: friendlyAiError(error) };
   }
+}
+
+/** Suggests sides for a night's dinner: the family's own, plus easy new ideas. */
+export async function recommendSidesAction(date: string): Promise<{ error: string } | { ideas: SideIdea[] }> {
+  await requireParentMember();
+  if (!dateSchema.safeParse(date).success) return { error: "Unknown night." };
+  const found = await tonightsMain(date);
+  if (!found) return { error: "Pick a dinner for that night first." };
+  return suggestSides(found.main, found.meal.sideRecipeIds);
+}
+
+/** Same, for a dinner being picked (not saved to the night yet). */
+export async function recommendSidesForMainAction(recipeId: string, chosenIds: string[]): Promise<{ error: string } | { ideas: SideIdea[] }> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown dinner." };
+  const main = await getRecipe(db, { id: recipeId });
+  if (!main) return { error: "Unknown dinner." };
+  return suggestSides(main, chosenIds.filter((id) => z.uuid().safeParse(id).success));
 }
 
 /**

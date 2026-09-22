@@ -1,7 +1,7 @@
 import "server-only";
 import type { Database } from "@/db";
 import type { Recipe } from "@/lib/recipes/schema";
-import { saveRecipe, slugify, uniqueSlug } from "@/lib/recipes/store";
+import { saveRecipe, slugify, uniqueSlug, type SourceRating } from "@/lib/recipes/store";
 
 /**
  * Saves an AI-made recipe as a draft: it shows up with a "check it over"
@@ -16,6 +16,7 @@ export async function saveDraftRecipe(
     notes: string | null;
     warnings: string[];
     createdByMemberId: string;
+    sourceRating?: SourceRating | null;
   },
 ): Promise<string> {
   const slug = await uniqueSlug(db, slugify(recipe.title));
@@ -29,6 +30,7 @@ export async function saveDraftRecipe(
       status: "draft",
       notes: [options.notes, check].filter(Boolean).join("\n\n") || null,
       createdByMemberId: options.createdByMemberId,
+      sourceRating: options.sourceRating ?? null,
     },
   );
   return slug;

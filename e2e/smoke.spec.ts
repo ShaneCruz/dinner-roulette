@@ -61,6 +61,8 @@ test("every page opens without crashing", async ({ page }) => {
     "/recipes?kind=side",
     "/recipes/new",
     "/recipes/import",
+    "/recipes/import/send-button",
+    "/recipes/discover",
     "/takeout",
     "/takeout/spin",
     "/session",

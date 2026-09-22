@@ -2,11 +2,11 @@ import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { loadFamilyBrief } from "@/lib/ai/brief";
-import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
-import { generateRecipe, importRecipe, inventNewMeal, normalizeAiRecipe, type ImportSource } from "@/lib/ai/recipes";
+import { PageFetchError, fetchRecipePage, jsonLdToText, ratingFromJsonLd, siteName } from "@/lib/ai/fetch-page";
+import { generateRecipe, importRecipe, inventNewMeal, normalizeAiRecipe, parseRatingText, type ImportSource } from "@/lib/ai/recipes";
 import { saveDraftRecipe } from "@/lib/ai/save";
 import { ensureNutrition } from "@/lib/nutrition-store";
-import { getRecipe, listRecipes } from "@/lib/recipes/store";
+import { getRecipe, listRecipes, type SourceRating } from "@/lib/recipes/store";
 import { season } from "@/lib/suggest/engine";
 import { todayIn } from "@/lib/presence";
 import { getActingMember, getFamilySettings, getParentSession } from "@/lib/session";
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     let result;
     let sourceUrl: string | null = null;
     let source: "ai" | "import" = "import";
+    let rating: SourceRating | null = null;
 
     if (mode === "photo" || mode === "pdf") {
       const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
@@ -68,7 +69,24 @@ export async function POST(request: Request) {
       if (!url) return fail("Paste a link first.");
       const page = await fetchRecipePage(url);
       sourceUrl = page.url;
+      if (page.rating.rating || page.rating.count) rating = { site: siteName(page.url), ...page.rating };
       result = await importRecipe({ kind: "text", text: page.text, sourceUrl: page.url }, brief, tweaks);
+    } else if (mode === "sent") {
+      // Sent from the "Send to Dinner Roulette" button on a recipe site: the
+      // page's own structured data, read in the family's browser.
+      let payload: { url?: unknown; recipe?: unknown };
+      try {
+        payload = JSON.parse(String(form.get("payload") ?? "").slice(0, 400_000));
+      } catch {
+        return fail("That recipe didn't come through. Try the button again.");
+      }
+      const ld = payload.recipe && typeof payload.recipe === "object" ? (payload.recipe as Record<string, unknown>) : null;
+      const pageUrl = typeof payload.url === "string" && /^https?:\/\//.test(payload.url) ? payload.url.slice(0, 500) : null;
+      if (!ld) return fail("No recipe was found on that page.");
+      sourceUrl = pageUrl;
+      const found = ratingFromJsonLd(ld);
+      rating = { site: pageUrl ? siteName(pageUrl) : null, ...found };
+      result = await importRecipe({ kind: "text", text: jsonLdToText(ld), sourceUrl: pageUrl ?? undefined }, brief, tweaks);
     } else if (mode === "text") {
       const text = String(form.get("text") ?? "").trim();
       if (text.length < 20) return fail("Paste or type a bit more of the recipe.");
@@ -91,12 +109,18 @@ export async function POST(request: Request) {
       return fail(result.problem ?? "Couldn't find a recipe in that. Try a clearer photo or paste the text.", 422);
     }
     const normalized = normalizeAiRecipe(result.recipe, sideSlugs);
+    // Screenshots and pasted text can show a rating too ("4.8 stars, 12,345 ratings").
+    if (!rating && "rating" in result) {
+      const parsed = parseRatingText(result.rating);
+      if (parsed) rating = { ...parsed, site: parsed.site ?? (sourceUrl ? siteName(sourceUrl) : null) };
+    }
     const slug = await saveDraftRecipe(db, normalized.recipe, {
       source,
       sourceUrl,
       notes: normalized.notes,
       warnings: normalized.warnings,
       createdByMemberId: acting.id,
+      sourceRating: source === "import" ? rating : null,
     });
     after(async () => {
       try {

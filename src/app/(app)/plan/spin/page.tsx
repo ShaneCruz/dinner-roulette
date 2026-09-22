@@ -7,7 +7,9 @@ import { loadMeals } from "@/lib/plan/store";
 import { formatDay, weekStartFor } from "@/lib/plan/week";
 import { addDays, todayIn } from "@/lib/presence";
 import { requireActingMember } from "@/lib/session";
-import { rankForNight } from "@/lib/suggest/engine";
+import { rankForNight, seededRandom } from "@/lib/suggest/engine";
+import { seedFrom } from "@/lib/fun/deck";
+import { dealWheel } from "@/lib/fun/wheel-options";
 import { loadEngineInputs } from "@/lib/suggest/load";
 import { DinnerSpinner } from "./dinner-spinner";
 
@@ -59,9 +61,24 @@ export default async function DinnerSpinPage({ searchParams }: PageProps<"/plan/
     inputs.chosen.filter((c) => c.date !== date),
   ).filter((r) => !r.excluded);
   const byId = new Map(inputs.context.recipes.map((r) => [r.id, r]));
-  const options = ranked.slice(0, SLICES).map((r) => {
-    const found = byId.get(r.recipeId)!;
-    return { id: found.id, title: found.title, slug: found.slug, emoji: cuisineEmoji(`${found.title} ${found.cuisine}`), reason: r.reasons[0] ?? null };
+  const deal = typeof params.deal === "string" && /^\d{1,6}$/.test(params.deal) ? Number(params.deal) : 0;
+  const dealt = dealWheel(
+    ranked,
+    new Map(inputs.context.recipes.map((r) => [r.id, r.lastCooked])),
+    today,
+    seededRandom(seedFrom(`${date}:${deal}`)),
+    { size: SLICES },
+  );
+  const reasons = new Map(ranked.map((r) => [r.recipeId, r.reasons[0] ?? null]));
+  const options = dealt.map((id) => {
+    const found = byId.get(id)!;
+    return {
+      id: found.id,
+      title: found.title,
+      slug: found.slug,
+      emoji: cuisineEmoji(`${found.title} ${found.cuisine}`),
+      reason: found.lastCooked ? reasons.get(id) ?? null : `Never made it! ${reasons.get(id) ?? ""}`.trim(),
+    };
   });
 
   return (
@@ -69,7 +86,7 @@ export default async function DinnerSpinPage({ searchParams }: PageProps<"/plan/
       {back}
       <PageHeader
         title="Spin for dinner"
-        subtitle={`${date === today ? "Tonight" : formatDay(date, "long")} · the ${options.length} best fits for whoever's eating`}
+        subtitle={`${date === today ? "Tonight" : formatDay(date, "long")} · ${options.length} good fits for whoever's eating`}
       />
       {handPicked && !isParent ? (
         <Card className="text-center">
@@ -81,6 +98,8 @@ export default async function DinnerSpinPage({ searchParams }: PageProps<"/plan/
         </Card>
       ) : (
         <DinnerSpinner
+          key={`${date}:${deal}`}
+          shuffleHref={ranked.length > SLICES ? `/plan/spin?date=${date}&deal=${deal + 1}` : null}
           date={date}
           options={options}
           chaosEnabled={settings.chaosSliceEnabled}

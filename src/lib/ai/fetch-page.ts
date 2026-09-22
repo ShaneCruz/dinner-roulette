@@ -43,6 +43,45 @@ export function extractJsonLdRecipe(html: string): Record<string, unknown> | nul
   return null;
 }
 
+/** "www.allrecipes.com" → "Allrecipes" */
+export function siteName(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    const known: Record<string, string> = {
+      "allrecipes.com": "Allrecipes",
+      "foodnetwork.com": "Food Network",
+      "food.com": "Food.com",
+      "budgetbytes.com": "Budget Bytes",
+      "seriouseats.com": "Serious Eats",
+      "cooking.nytimes.com": "NYT Cooking",
+      "tasteofhome.com": "Taste of Home",
+      "delish.com": "Delish",
+      "simplyrecipes.com": "Simply Recipes",
+    };
+    return known[host] ?? host.split(".").slice(-2, -1)[0]?.replace(/^./, (c) => c.toUpperCase()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Star rating and count from schema.org data, e.g. { rating: 4.8, count: 12345 }. */
+export function ratingFromJsonLd(recipe: Record<string, unknown>): { rating: number | null; count: number | null } {
+  const agg = recipe.aggregateRating as { ratingValue?: unknown; ratingCount?: unknown; reviewCount?: unknown } | undefined;
+  if (!agg || typeof agg !== "object") return { rating: null, count: null };
+  const rating = Number(agg.ratingValue);
+  const count = Number(agg.ratingCount ?? agg.reviewCount);
+  return {
+    rating: Number.isFinite(rating) && rating > 0 && rating <= 5 ? Math.round(rating * 10) / 10 : null,
+    count: Number.isFinite(count) && count > 0 ? Math.round(count) : null,
+  };
+}
+
+/** Turns a schema.org Recipe into compact text for the importer (no reviews, images or video). */
+export function jsonLdToText(recipe: Record<string, unknown>): string {
+  const { review: _r, aggregateRating: _a, image: _i, video: _v, ...rest } = recipe;
+  return `Structured recipe data from the page:\n${JSON.stringify(rest).slice(0, MAX_TEXT)}`;
+}
+
 export function htmlToText(html: string): string {
   return html
     .replace(/<(script|style|noscript|svg|nav|footer|header)[\s\S]*?<\/\1>/gi, " ")
@@ -62,7 +101,9 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
-export async function fetchRecipePage(rawUrl: string): Promise<{ text: string; url: string }> {
+export async function fetchRecipePage(
+  rawUrl: string,
+): Promise<{ text: string; url: string; rating: { rating: number | null; count: number | null } }> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -91,7 +132,9 @@ export async function fetchRecipePage(rawUrl: string): Promise<{ text: string; u
   if (!response.ok) {
     throw new PageFetchError(
       response.status === 403
-        ? "That site blocks apps from reading it. Copy and paste the recipe text instead."
+        ? /allrecipes\.com$/.test(url.hostname)
+          ? "Allrecipes blocks apps from reading it. Use the “Send to Dinner Roulette” button on the Allrecipes page instead (see Add a recipe), or take screenshots."
+          : "That site blocks apps from reading it. Copy and paste the recipe text instead."
         : `That page answered with an error (${response.status}). Try pasting the recipe text instead.`,
     );
   }
@@ -100,12 +143,8 @@ export async function fetchRecipePage(rawUrl: string): Promise<{ text: string; u
   const html = new TextDecoder().decode(buffer);
 
   const jsonLd = extractJsonLdRecipe(html);
-  if (jsonLd) {
-    // Drop bulky fields that don't help (reviews, images, video).
-    const { review: _r, aggregateRating: _a, image: _i, video: _v, ...rest } = jsonLd;
-    return { text: `Structured recipe data from the page:\n${JSON.stringify(rest).slice(0, MAX_TEXT)}`, url: response.url };
-  }
+  if (jsonLd) return { text: jsonLdToText(jsonLd), url: response.url, rating: ratingFromJsonLd(jsonLd) };
   const text = htmlToText(html);
   if (text.length < 200) throw new PageFetchError("Couldn't find a recipe on that page. Try pasting the text instead.");
-  return { text: text.slice(0, MAX_TEXT), url: response.url };
+  return { text: text.slice(0, MAX_TEXT), url: response.url, rating: { rating: null, count: null } };
 }

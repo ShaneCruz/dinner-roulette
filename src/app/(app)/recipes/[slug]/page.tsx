@@ -18,6 +18,8 @@ import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { RatingsSummary } from "@/components/ratings-summary";
 import { archiveRecipe } from "../actions";
 import { RecipeView } from "./recipe-view";
+import { SourceRatingBadge } from "@/components/source-rating";
+import { SourceRatingEditor } from "./source-rating-editor";
 import { RecipeTweaks } from "./recipe-tweaks";
 import { diffRecipes } from "@/lib/recipes/diff";
 import { latestRevision, pendingProposal } from "@/lib/recipes/proposals";
@@ -114,6 +116,8 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
               <Badge key={tag}>{RECIPE_TAG_LABELS[tag]}</Badge>
             ))}
           <SpiceMeter level={recipe.spiceLevel} />
+          <SourceRatingBadge rating={recipe.sourceRating} url={recipe.sourceUrl} />
+          {isParent && !recipe.sourceRating ? <SourceRatingEditor recipeId={recipe.id} initialSite={null} /> : null}
           {recipe.archivedAt ? <Badge tone="tomato">Archived</Badge> : null}
           {recipe.status === "draft" ? <Badge tone="mustard">Draft</Badge> : null}
         </div>

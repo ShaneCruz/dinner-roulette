@@ -57,6 +57,20 @@
       "when": 1790062465890,
       "tag": "0007_overnight",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790079376794,
+      "tag": "0008_recipe_ideas",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790079910067,
+      "tag": "0009_source_ratings",
+      "breakpoints": true
     }
   ]
 }

@@ -56,6 +56,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/auth")) return;
+  // In development, file names don't change between edits; never cache there.
+  if (self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1") return;
 
   // Build output is content-hashed, so it never changes once fetched.
   if (url.pathname.startsWith("/_next/static/")) {

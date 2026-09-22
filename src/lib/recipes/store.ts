@@ -14,6 +14,9 @@ import {
 
 export type RecipeSource = (typeof recipe.$inferSelect)["source"];
 
+/** A rating from the site a recipe came from ("Allrecipes, 4.8 from 12,345 ratings"). */
+export type SourceRating = { site: string | null; rating: number | null; count: number | null };
+
 export type StoredRecipe = Recipe & {
   id: string;
   source: RecipeSource;
@@ -22,6 +25,7 @@ export type StoredRecipe = Recipe & {
   notes: string | null;
   archivedAt: Date | null;
   nutrition: Nutrition | null;
+  sourceRating: SourceRating | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -48,6 +52,8 @@ type SaveOptions = {
   source: RecipeSource;
   /** Kept only when the caller knows it still matches; any edit clears it for re-estimating */
   nutrition?: Nutrition | null;
+  /** Rating on the site it came from; leave undefined to keep what's there */
+  sourceRating?: SourceRating | null;
   sourceUrl?: string | null;
   status?: "draft" | "approved";
   notes?: string | null;
@@ -89,6 +95,13 @@ export async function saveRecipe(
     status: options.status ?? "approved",
     notes: options.notes ?? null,
     nutrition: options.nutrition ?? null,
+    ...(options.sourceRating !== undefined
+      ? {
+          sourceName: options.sourceRating?.site ?? null,
+          sourceRating: options.sourceRating?.rating ?? null,
+          sourceRatingCount: options.sourceRating?.count ?? null,
+        }
+      : {}),
   };
 
   return db.transaction(async (tx) => {
@@ -178,6 +191,10 @@ export async function getRecipe(
     notes: row.notes,
     archivedAt: row.archivedAt,
     nutrition: row.nutrition,
+    sourceRating:
+      row.sourceRating !== null || row.sourceName
+        ? { site: row.sourceName, rating: row.sourceRating, count: row.sourceRatingCount }
+        : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ingredients: ingredients.map((i) => ({

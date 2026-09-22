@@ -264,6 +264,10 @@ export const recipe = pgTable(
     pairsWith: text("pairs_with").array().notNull().default(sql`'{}'::text[]`),
     /** Per serving; null until estimated (and cleared when the recipe changes) */
     nutrition: jsonb("nutrition").$type<Nutrition>(),
+    /** Where it came from and how it's rated there, e.g. Allrecipes 4.8 from 12,345 ratings */
+    sourceName: text("source_name"),
+    sourceRating: doublePrecision("source_rating"),
+    sourceRatingCount: integer("source_rating_count"),
     source: recipeSource("source").notNull(),
     sourceUrl: text("source_url"),
     status: recipeStatus("status").notNull().default("approved"),
@@ -666,3 +670,31 @@ export const notificationLog = pgTable("notification_log", {
   key: text("key").primaryKey(),
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const ideaStatus = pgEnum("idea_status", ["pending", "rejected", "writing", "added", "failed"]);
+
+/** A new-dinner idea for the family to swipe on. Accepted ones become recipes. */
+export const recipeIdea = pgTable(
+  "recipe_idea",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    emoji: text("emoji").notNull().default("🍽️"),
+    cuisine: text("cuisine").notNull(),
+    activeMinutes: integer("active_minutes").notNull(),
+    totalMinutes: integer("total_minutes").notNull(),
+    healthCategory: text("health_category").$type<"healthy" | "balanced" | "comfort">().notNull(),
+    spiceLevel: integer("spice_level").notNull().default(0),
+    /** Why kids will eat it */
+    kidAppeal: text("kid_appeal"),
+    /** A family favorite it's a twist on, if any */
+    twistOn: text("twist_on"),
+    status: ideaStatus("status").notNull().default("pending"),
+    recipeId: uuid("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+    decidedByMemberId: uuid("decided_by_member_id").references(() => member.id, { onDelete: "set null" }),
+    error: text("error"),
+    ...timestamps,
+  },
+  (t) => [index("recipe_idea_status_idx").on(t.status, t.createdAt)],
+);

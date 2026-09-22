@@ -84,12 +84,29 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
           ? true
           : text.trim().length > 2;
 
-  async function submit() {
+  // A recipe sent from the "Send to Dinner Roulette" button arrives in the
+  // address after "#send=". Import it right away.
+  useEffect(() => {
+    const receive = () => {
+      if (!window.location.hash.startsWith("#send=")) return;
+      const payload = decodeURIComponent(window.location.hash.slice("#send=".length));
+      history.replaceState(null, "", window.location.pathname);
+      void submit({ mode: "sent", payload });
+    };
+    receive();
+    // Also when a recipe is sent to this page while it's already open.
+    window.addEventListener("hashchange", receive);
+    return () => window.removeEventListener("hashchange", receive);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submit(override?: { mode: "sent"; payload: string }) {
     setBusy(true);
     setError(null);
     setLine(0);
     const form = new FormData();
-    form.set("mode", mode);
+    form.set("mode", override?.mode ?? mode);
+    if (override) form.set("payload", override.payload);
     files.forEach((f) => form.append("files", f));
     form.set("url", url);
     form.set("text", text);
@@ -200,6 +217,15 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
             aria-label="Recipe link"
           />
         ) : null}
+        {mode === "link" ? (
+          <p className="text-sm text-muted">
+            Allrecipes links don&apos;t work here (they block apps).{" "}
+            <Link href="/recipes/import/send-button" className="font-semibold text-tomato underline">
+              Set up the “Send to Dinner Roulette” button
+            </Link>{" "}
+            to import from Allrecipes with its star rating.
+          </p>
+        ) : null}
 
         {mode === "text" || mode === "describe" ? (
           <textarea
@@ -242,7 +268,7 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
           </p>
         ) : null}
 
-        <Button type="button" size="lg" className="w-full" disabled={!ready} onClick={submit}>
+        <Button type="button" size="lg" className="w-full" disabled={!ready} onClick={() => void submit()}>
           {mode === "describe" ? "✨ Write the recipe" : mode === "surprise" ? "🎲 Surprise us" : "✨ Turn it into a recipe"}
         </Button>
       </Card>
