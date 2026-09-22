@@ -86,8 +86,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(data.title || "Dinner Roulette", {
       body: data.body || "",
       tag: data.tag,
-      icon: "/icon",
-      badge: "/icon",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
       data: { url: data.url || "/" },
     }),
   );
