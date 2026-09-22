@@ -1,0 +1,27 @@
+# Runs the app's scheduled jobs (reminders, Friday autopilot, recipe tweaks,
+# nutrition estimates) every 15 minutes by calling /api/cron.
+#
+# Setup for a new deploy: add the repository variable APP_URL (e.g.
+# https://dinner.example.com) and the secret CRON_SECRET (same value as the
+# CRON_SECRET environment variable in Vercel).
+name: Scheduler
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    if: vars.APP_URL != ''
+    timeout-minutes: 6
+    steps:
+      - name: Run scheduled jobs
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron"
