@@ -18,6 +18,16 @@ import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { RatingsSummary } from "@/components/ratings-summary";
 import { archiveRecipe } from "../actions";
 import { RecipeView } from "./recipe-view";
+import { RecipeTweaks } from "./recipe-tweaks";
+import { diffRecipes } from "@/lib/recipes/diff";
+import { latestRevision, pendingProposal } from "@/lib/recipes/proposals";
+import { REASONS, reasonLabel } from "@/lib/ratings/scale";
+import { EstimateNutritionButton } from "./estimate-button";
+import { NutritionFacts } from "@/components/nutrition-facts";
+import { aiEnabled } from "@/lib/ai/claude";
+
+// Asking Claude for a recipe tweak can take a minute.
+export const maxDuration = 300;
 
 export async function generateMetadata({ params }: PageProps<"/recipes/[slug]">) {
   const found = await getRecipe(db, { slug: (await params).slug });
@@ -49,6 +59,12 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const heatFor = recipe.spiceSplit ? heatSeekers(audience).map((m) => m.name) : [];
   const conflicts = nopeConflicts(recipe, audience);
   const isParent = acting.role === "parent";
+  const [proposal, revision] = isParent
+    ? await Promise.all([pendingProposal(db, recipe.id), latestRevision(db, recipe.id)])
+    : [null, null];
+  const complaintCounts = new Map<string, number>();
+  for (const r of ratings) for (const id of r.reasons) if (!REASONS.find((x) => x.id === id)?.positive) complaintCounts.set(id, (complaintCounts.get(id) ?? 0) + 1);
+  const complaints = [...complaintCounts.entries()].map(([id, n]) => `${reasonLabel(id)}${n > 1 ? ` (${n})` : ""}`);
 
   return (
     <article>
@@ -62,6 +78,9 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
             <p className="mt-2 max-w-2xl text-lg text-muted">{recipe.description}</p>
           </div>
           <div className="no-print flex flex-wrap gap-2">
+            <ButtonLink href={`/cook/${recipe.slug}`} size="sm">
+              👩‍🍳 Cooking mode
+            </ButtonLink>
             <ButtonLink href={`/recipes/${recipe.slug}/print`} variant="secondary" size="sm">
               🖨️ Print
             </ButtonLink>
@@ -121,6 +140,34 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
           ))}
         </ul>
       ) : null}
+
+      {isParent && aiEnabled() ? (
+        <RecipeTweaks
+          recipeId={recipe.id}
+          proposal={
+            proposal
+              ? {
+                  id: proposal.id,
+                  trigger: proposal.trigger,
+                  request: proposal.request,
+                  summary: proposal.summary,
+                  changes: proposal.changes,
+                  diff: diffRecipes(recipe, proposal.proposed),
+                  newSteps: proposal.proposed.steps.map((s) => s.text),
+                }
+              : null
+          }
+          complaints={complaints}
+          lastChange={revision?.reason ?? null}
+        />
+      ) : null}
+
+      <div className="mb-6">
+        <NutritionFacts
+          nutrition={recipe.nutrition}
+          action={isParent && aiEnabled() ? <EstimateNutritionButton id={recipe.id} /> : undefined}
+        />
+      </div>
 
       <RecipeView
         recipe={recipe}

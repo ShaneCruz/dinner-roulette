@@ -11,6 +11,8 @@ import { Card } from "@/components/ui";
 import { requireActingMember } from "@/lib/session";
 import { loadBadgeStats } from "@/lib/fun/badges";
 import { TrophyShelf } from "@/components/trophy-shelf";
+import { DeviceReminders } from "@/components/device-reminders";
+import { vapidPublicKey } from "@/lib/push";
 import {
   AvailabilityEditor,
   FoodRulesEditor,
@@ -18,6 +20,8 @@ import {
   OwnLookEditor,
   PinEditor,
 } from "../member-editors";
+import { CalendarImport } from "./calendar-import";
+import { aiEnabled } from "@/lib/ai/claude";
 
 export const metadata = { title: "Family member" };
 
@@ -53,6 +57,11 @@ export default async function MemberPage({ params }: PageProps<"/family/[id]">) 
         {back}
         <PageHeader title="Your look" subtitle="Pick an avatar and a chef title. Go wild." />
         {trophies}
+        <Card className="space-y-2">
+          <h2 className="text-xl font-bold">📱 Reminders</h2>
+          <p className="text-sm text-muted">Get a nudge on this phone to rate dinner.</p>
+          <DeviceReminders vapidKey={vapidPublicKey()} name={found.name} />
+        </Card>
         {taste}
         <OwnLookEditor
           initial={{ avatarEmoji: found.avatarEmoji, avatarColor: found.avatarColor, chefTitle: found.chefTitle }}
@@ -112,6 +121,9 @@ export default async function MemberPage({ params }: PageProps<"/family/[id]">) 
       {taste}
       {trophies}
       <FoodRulesEditor memberId={found.id} name={found.name} rules={rules} recipes={recipes} />
+      {aiEnabled() ? (
+        <CalendarImport memberId={found.id} name={found.name} boarding={found.defaultPresence === "away"} />
+      ) : null}
       <AvailabilityEditor
         memberId={found.id}
         name={found.name}

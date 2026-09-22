@@ -1,6 +1,7 @@
 "use client";
 
 import { isLockedPick } from "@/lib/fun/card-info";
+import { mealNutrition, nutritionLine } from "@/lib/nutrition";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -74,6 +75,21 @@ export function PlanBoard({
     (n) => n.nightType === "cook" && !n.recipeId && n.status !== "skipped" && n.status !== "cooked",
   ).length;
   const [notice, setNotice] = useState<string | null>(null);
+  const cookedMeals = nights
+    .filter((n) => n.nightType === "cook" && n.recipeId && n.status !== "skipped")
+    .map((n) => {
+      const main = byId.get(n.recipeId!);
+      return main ? mealNutrition([main.nutrition, ...n.sideRecipeIds.map((id) => byId.get(id)?.nutrition)]) : null;
+    })
+    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const weekAverage = cookedMeals.length >= 2
+    ? {
+        calories: Math.round(cookedMeals.reduce((a, m) => a + m.calories, 0) / cookedMeals.length),
+        proteinG: Math.round(cookedMeals.reduce((a, m) => a + m.proteinG, 0) / cookedMeals.length),
+        carbsG: Math.round(cookedMeals.reduce((a, m) => a + m.carbsG, 0) / cookedMeals.length),
+        fiberG: Math.round(cookedMeals.reduce((a, m) => a + m.fiberG, 0) / cookedMeals.length),
+      }
+    : null;
 
   return (
     <div className={cx("space-y-4", pending && "opacity-70 transition-opacity")}>
@@ -113,6 +129,13 @@ export function PlanBoard({
         </Card>
       ) : null}
       {notice ? <p className="rounded-2xl bg-basil-soft px-4 py-3 text-sm text-basil">{notice}</p> : null}
+
+      {weekAverage ? (
+        <p className="text-sm text-muted">
+          🥗 Planned dinners average <span className="font-semibold text-foreground">{nutritionLine(weekAverage)}</span> per
+          person (approximate).
+        </p>
+      ) : null}
 
       {bumped.length > 0 ? (
         <Card className="border-mustard bg-mustard-soft">
@@ -234,6 +257,7 @@ function NightCard({
   const eating = new Set(night.eatingIds);
   const favored = members.find((m) => m.id === night.favoredMemberId) ?? null;
   const todayRef = useRef<HTMLDivElement>(null);
+  const meal = recipe ? mealNutrition([recipe.nutrition, ...sides.map((side) => side.nutrition)]) : null;
   // Anyone can spin for an open night or one the planner picked; hand-picked dinners are the parents' call.
   const spinnable =
     cooking &&
@@ -376,6 +400,7 @@ function NightCard({
               {recipe.healthCategory === "healthy" ? <Badge tone="basil">Healthy</Badge> : null}
               {recipe.healthCategory === "comfort" ? <Badge tone="mustard">Comfort</Badge> : null}
             </div>
+            {meal ? <p className="mt-2 text-xs font-semibold text-basil">{nutritionLine(meal)}{meal.complete ? "" : " (main only)"}</p> : null}
             {night.suggestionReason ? (
               <p className="mt-2 text-sm text-muted">✨ {night.suggestionReason}</p>
             ) : null}

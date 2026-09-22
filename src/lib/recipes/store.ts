@@ -1,6 +1,6 @@
 import { and, asc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db";
-import { recipe, recipeIngredient, recipeVariant } from "@/db/schema";
+import { recipe, recipeIngredient, recipeVariant, type Nutrition } from "@/db/schema";
 import {
   recipeInputSchema,
   type CookMethod,
@@ -21,6 +21,7 @@ export type StoredRecipe = Recipe & {
   status: "draft" | "approved";
   notes: string | null;
   archivedAt: Date | null;
+  nutrition: Nutrition | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -45,6 +46,8 @@ export type RecipeSummary = Pick<
 
 type SaveOptions = {
   source: RecipeSource;
+  /** Kept only when the caller knows it still matches; any edit clears it for re-estimating */
+  nutrition?: Nutrition | null;
   sourceUrl?: string | null;
   status?: "draft" | "approved";
   notes?: string | null;
@@ -85,6 +88,7 @@ export async function saveRecipe(
     sourceUrl: options.sourceUrl ?? null,
     status: options.status ?? "approved",
     notes: options.notes ?? null,
+    nutrition: options.nutrition ?? null,
   };
 
   return db.transaction(async (tx) => {
@@ -173,6 +177,7 @@ export async function getRecipe(
     status: row.status,
     notes: row.notes,
     archivedAt: row.archivedAt,
+    nutrition: row.nutrition,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ingredients: ingredients.map((i) => ({

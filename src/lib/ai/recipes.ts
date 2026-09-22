@@ -28,7 +28,7 @@ const aiIngredient = z.object({
   optional: z.boolean(),
 });
 
-const aiRecipe = z.object({
+export const aiRecipe = z.object({
   title: z.string(),
   description: z.string().describe("One or two friendly sentences; a little humor is welcome"),
   kind: z.enum(["main", "side"]),
@@ -110,7 +110,7 @@ export function describeFamily(brief: FamilyBrief, mode: "import" | "create" = "
   return lines.filter(Boolean).join("\n");
 }
 
-const RULES = `Recipe format rules:
+export const RULES = `Recipe format rules:
 - Ingredient names: lowercase, singular, generic ("bell pepper", "boneless skinless chicken breast"). Prep and sizes go in note.
 - Use units from the list; countable things use "whole"; salt and pepper to taste use quantity null with unit "to_taste".
 - Steps: 3-10 short, beginner-friendly steps. Put waiting time (simmer, bake, rest) in timerMinutes.

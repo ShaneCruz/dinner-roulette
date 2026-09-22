@@ -22,6 +22,7 @@ import { eatersFor, loadEaterContext } from "@/lib/plan/store";
 import { dayOfWeek, formatDay } from "@/lib/plan/week";
 import { loadBadgeStats } from "@/lib/fun/badges";
 import { TrophyShelf } from "@/components/trophy-shelf";
+import { listPendingProposals } from "@/lib/recipes/proposals";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { MadeItButton } from "./tonight-actions";
 
@@ -77,6 +78,8 @@ export default async function HomePage() {
     })
     .filter((x) => x.missing.length > 0);
 
+  const tweaks = acting.role === "parent" ? await listPendingProposals(db) : [];
+
   // Weekends are for the Sunday session: plan next week together.
   const dow = dayOfWeek(today);
   const sessionTime = dow === 5 || dow === 6 || dow === 0;
@@ -115,6 +118,22 @@ export default async function HomePage() {
           </div>
         </Card>
       ))}
+
+      {tweaks.length ? (
+        <Card className="border-plum/30 bg-plum-soft">
+          <p className="font-bold">✨ {tweaks.length === 1 ? "A recipe tweak is" : `${tweaks.length} recipe tweaks are`} ready to review</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {tweaks.slice(0, 4).map((t) => (
+              <li key={t.id}>
+                <Link href={`/recipes/${t.slug}`} className="font-semibold underline">
+                  {t.title}
+                </Link>
+                : {t.summary}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {sessionTime ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-mustard-soft to-surface">
@@ -233,7 +252,7 @@ export default async function HomePage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {tonightRecipe ? (
-              <ButtonLink href={`/recipes/${tonightRecipe.slug}`}>Let&apos;s cook</ButtonLink>
+              <ButtonLink href={`/cook/${tonightRecipe.slug}`}>👩‍🍳 Let&apos;s cook</ButtonLink>
             ) : (
               <ButtonLink href="/plan">Plan the week</ButtonLink>
             )}

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { recipe as recipeTable, restaurant } from "@/db/schema";
+import { recipe as recipeTable, restaurant, type Nutrition } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { presenceOn } from "@/lib/presence";
 import { assignTurns, rankForNight, type Weather } from "@/lib/suggest/engine";
@@ -42,6 +42,7 @@ export type RecipeOption = {
   healthCategory: "healthy" | "balanced" | "comfort";
   seasonFit: "any" | "warm" | "cold";
   lastCooked: string | null;
+  nutrition: Nutrition | null;
 };
 
 /** How each dinner fits a given night: score order, best reason, or why not. */
@@ -118,6 +119,7 @@ export async function loadWeekView(weekStart: string) {
     healthCategory: r.healthCategory,
     seasonFit: r.seasonFit,
     lastCooked: r.lastCooked,
+    nutrition: r.nutrition ?? null,
   }));
   // Drafts and archived recipes aren't suggested, but a night might still use one.
   for (const night of nights) {
@@ -136,6 +138,7 @@ export async function loadWeekView(weekStart: string) {
             healthCategory: missing.healthCategory,
             seasonFit: missing.seasonFit,
             lastCooked: null,
+            nutrition: missing.nutrition,
           });
         }
       }
