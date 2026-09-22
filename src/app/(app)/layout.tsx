@@ -46,10 +46,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </form>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6 sm:pb-12">{children}</main>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-36 pt-6 sm:pb-12">{children}</main>
       {acting.welcomedAt ? null : <Welcome role={acting.role} name={acting.name} />}
       <nav
-        className="no-print fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+        className="no-print fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
         aria-label="Main"
       >
         <NavLinks isParent={isParent} variant="bottom" />

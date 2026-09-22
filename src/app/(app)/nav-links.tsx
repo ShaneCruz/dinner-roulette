@@ -44,7 +44,8 @@ export function NavLinks({ isParent, variant }: { isParent: boolean; variant: "t
           <Link
             href={l.href}
             className={cx(
-              "flex flex-col items-center gap-0.5 py-2 text-xs font-semibold",
+              // Big enough to hit with a thumb, and clear of the home indicator.
+              "flex min-h-14 flex-col items-center justify-center gap-1 py-3 text-xs font-semibold",
               isActive(l.href) ? "text-tomato-strong" : "text-muted",
             )}
           >
