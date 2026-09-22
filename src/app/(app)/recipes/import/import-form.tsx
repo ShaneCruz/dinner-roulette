@@ -62,6 +62,7 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
   const [previews, setPreviews] = useState<string[]>([]);
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
+  const [tweaks, setTweaks] = useState("");
   const [busy, setBusy] = useState(false);
   const [line, setLine] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +111,7 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
     files.forEach((f) => form.append("files", f));
     form.set("url", url);
     form.set("text", text);
+    form.set("tweaks", tweaks);
     try {
       const response = await fetch("/api/recipes/import", { method: "POST", body: form });
       const data = (await response.json().catch(() => ({}))) as { slug?: string; error?: string };
@@ -230,6 +232,19 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
             }
             aria-label={mode === "text" ? "Recipe text" : "What you'd like"}
           />
+        ) : null}
+
+        {mode === "photo" || mode === "pdf" || mode === "link" || mode === "text" ? (
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold">How does your family make it differently? (optional)</span>
+            <textarea
+              className={inputClass}
+              rows={2}
+              value={tweaks}
+              onChange={(e) => setTweaks(e.target.value)}
+              placeholder="We add more tomatoes and sauce but keep the same beef. We skip the wine."
+            />
+          </label>
         ) : null}
 
         {mode === "surprise" ? (

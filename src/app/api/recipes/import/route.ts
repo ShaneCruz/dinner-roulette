@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     return fail("That upload was too big. Photos are shrunk automatically; PDFs need to be under 4 MB.", 413);
   }
   const mode = String(form.get("mode") ?? "");
+  const tweaks = String(form.get("tweaks") ?? "").trim().slice(0, 2000);
 
   try {
     const brief = await loadFamilyBrief(db);
@@ -60,17 +61,17 @@ export async function POST(request: Request) {
         }
         importSource = { kind: "images", images };
       }
-      result = await importRecipe(importSource, brief);
+      result = await importRecipe(importSource, brief, tweaks);
     } else if (mode === "link") {
       const url = String(form.get("url") ?? "").trim();
       if (!url) return fail("Paste a link first.");
       const page = await fetchRecipePage(url);
       sourceUrl = page.url;
-      result = await importRecipe({ kind: "text", text: page.text, sourceUrl: page.url }, brief);
+      result = await importRecipe({ kind: "text", text: page.text, sourceUrl: page.url }, brief, tweaks);
     } else if (mode === "text") {
       const text = String(form.get("text") ?? "").trim();
       if (text.length < 20) return fail("Paste or type a bit more of the recipe.");
-      result = await importRecipe({ kind: "text", text: text.slice(0, 60_000) }, brief);
+      result = await importRecipe({ kind: "text", text: text.slice(0, 60_000) }, brief, tweaks);
     } else if (mode === "describe") {
       const description = String(form.get("text") ?? "").trim();
       if (description.length < 3) return fail("Tell me what you'd like to make.");

@@ -65,7 +65,7 @@ export function RecipeForm({
   const [pending, startTransition] = useTransition();
 
   const set = <K extends keyof Recipe>(key: K, value: Recipe[K]) => setRecipe({ ...recipe, [key]: value });
-  const ingredientNames = recipe.ingredients.map((i) => i.name).filter(Boolean);
+  const ingredientNames = [...new Set(recipe.ingredients.map((i) => i.name).filter(Boolean))];
 
   function submit() {
     setError(null);
