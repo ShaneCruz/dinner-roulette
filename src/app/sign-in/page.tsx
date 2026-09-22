@@ -14,7 +14,7 @@ export default async function SignInPage() {
         <div className="mb-4 text-7xl" aria-hidden>
           🎡
         </div>
-        <h1 className="text-4xl font-bold">Dinner Roulette</h1>
+        <h1 className="text-4xl font-bold">Cruz Meals</h1>
         <p className="mt-2 text-muted">Family dinners, decided.</p>
       </div>
       <SignInButtons google={authProviders.google} devLogin={authProviders.devLogin} />

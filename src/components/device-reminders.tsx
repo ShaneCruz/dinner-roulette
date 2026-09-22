@@ -109,7 +109,7 @@ export function DeviceReminders({ vapidKey, name }: { vapidKey: string | null; n
       {state === "ios-install" ? (
         <p className="rounded-2xl bg-mustard-soft p-3 text-sm">
           📱 On iPhone, reminders only work from the Home Screen app: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, open
-          Dinner Roulette from there, and come back to this page.
+          Cruz Meals from there, and come back to this page.
         </p>
       ) : null}
       {state === "blocked" ? (

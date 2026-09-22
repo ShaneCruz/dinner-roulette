@@ -1,4 +1,4 @@
-import { Card, PageHeader } from "@/components/ui";
+import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import { DeviceReminders } from "@/components/device-reminders";
 import { DEFAULT_REMINDERS } from "@/db/schema";
 import { vapidPublicKey } from "@/lib/push";
@@ -16,6 +16,15 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title="Settings" subtitle="How the planner thinks about your week." />
+      <Card className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-bold">📖 How Cruz Meals works</p>
+          <p className="text-sm text-muted">The short guide: what each part does and who does what.</p>
+        </div>
+        <ButtonLink href="/help" variant="secondary" size="sm">
+          Open the guide
+        </ButtonLink>
+      </Card>
       <AiBudget budgetCents={spending.budgetCents} spentCents={spending.spentCents} byFeature={spending.byFeature} />
       <Card className="space-y-2">
         <h2 className="text-xl font-bold">📱 Reminders on this phone</h2>

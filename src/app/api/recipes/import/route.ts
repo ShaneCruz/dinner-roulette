@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       if (page.rating.rating || page.rating.count) rating = { site: siteName(page.url), ...page.rating };
       result = await importRecipe({ kind: "text", text: page.text, sourceUrl: page.url }, brief, tweaks);
     } else if (mode === "sent") {
-      // Sent from the "Send to Dinner Roulette" button on a recipe site: the
+      // Sent from the "Send to Cruz Meals" button on a recipe site: the
       // page's own structured data, read in the family's browser.
       let payload: { url?: unknown; recipe?: unknown };
       try {

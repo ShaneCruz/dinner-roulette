@@ -69,6 +69,7 @@ test("every page opens without crashing", async ({ page }) => {
     "/session?week=next",
     "/plan/spin",
     "/cook/taco-night",
+    "/help",
     "/family",
     "/family/new",
     "/settings",

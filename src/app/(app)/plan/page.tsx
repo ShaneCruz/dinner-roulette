@@ -5,6 +5,7 @@ import { loadWeekView } from "@/lib/plan/view";
 import { addDays, todayIn } from "@/lib/presence";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { PlanBoard } from "./plan-board";
+import { Tip } from "@/components/tip";
 
 export const metadata = { title: "This week" };
 
@@ -70,6 +71,10 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
           picked for your family.
         </p>
       ) : null}
+      <Tip id="plan">
+        Each night shows whose turn it is (🎯) and how much time it has (Quick, Normal, Weekend, Hands-off). Tap a night to
+        change the dinner, ↻ for another idea, or 🎡 to let the wheel decide.
+      </Tip>
       <PlanBoard
         nights={view.nights}
         options={view.options}

@@ -78,6 +78,13 @@
       "when": 1790084508177,
       "tag": "0010_ai_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790111760975,
+      "tag": "0011_welcome",
+      "breakpoints": true
     }
   ]
 }

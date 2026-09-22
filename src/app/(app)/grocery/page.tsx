@@ -7,6 +7,7 @@ import { formatDay, weekDates, weekStartFor } from "@/lib/plan/week";
 import { addDays, todayIn } from "@/lib/presence";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { GroceryList } from "./grocery-list";
+import { Tip } from "@/components/tip";
 
 export const metadata = { title: "Grocery list" };
 
@@ -41,6 +42,10 @@ export default async function GroceryPage({ searchParams }: PageProps<"/grocery"
           Next week →
         </Link>
       </nav>
+      <Tip id="grocery">
+        This list comes from the week&apos;s dinners. Check things off as you shop, even with no signal, and tap a section
+        header to claim it when you&apos;re splitting up.
+      </Tip>
       {plan && snapshot ? (
         <GroceryList
           weekPlanId={plan.id}

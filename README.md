@@ -1,6 +1,6 @@
-# 🎡 Dinner Roulette
+# 🎡 Cruz Meals
 
-Family dinners, decided. Dinner Roulette remembers what everyone likes, knows who's home tonight, plans the week around how much time you actually have, builds the grocery list, and spins a wheel when nobody can agree.
+Family dinners, decided. Cruz Meals remembers what everyone likes, knows who's home tonight, plans the week around how much time you actually have, builds the grocery list, and spins a wheel when nobody can agree.
 
 Each family runs its own copy: one deployment, one family, your data in your own database.
 
