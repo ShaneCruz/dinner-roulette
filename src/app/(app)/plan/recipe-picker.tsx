@@ -2,21 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, cx, inputClass } from "@/components/ui";
-import type { NightView, RecipeOption } from "@/lib/plan/view";
-import { TIME_BUDGETS, fitsBudget, formatDay } from "@/lib/plan/week";
+import type { NightRanking, NightView, RecipeOption } from "@/lib/plan/view";
+import { TIME_BUDGETS, formatDay } from "@/lib/plan/week";
 import { daysBetween } from "@/lib/presence";
 
 export function RecipePicker({
   night,
   options,
-  weeknightActiveMinutes,
   onClose,
   onPick,
   plannedThisWeek,
+  ranking,
+  favoredName,
 }: {
   night: NightView;
   options: RecipeOption[];
-  weeknightActiveMinutes: number;
+  /** Engine's view of every dinner for this night */
+  ranking: NightRanking;
+  favoredName: string | null;
   onClose: () => void;
   onPick: (recipeId: string, sideRecipeIds: string[]) => void;
   /** Dinners already on other nights this week, by recipe id */
@@ -34,9 +37,12 @@ export function RecipePicker({
   }, [onClose]);
 
   const term = search.trim().toLowerCase();
-  const mains = options.filter((o) => o.kind === "main" && (!term || o.title.toLowerCase().includes(term)));
-  const fits = mains.filter((o) => fitsBudget(o, night.timeBudget, weeknightActiveMinutes));
-  const tooLong = mains.filter((o) => !fitsBudget(o, night.timeBudget, weeknightActiveMinutes));
+  const rank = new Map(ranking.map((r, i) => [r.recipeId, { ...r, position: i }]));
+  const mains = options
+    .filter((o) => o.kind === "main" && (!term || o.title.toLowerCase().includes(term)))
+    .sort((a, b) => (rank.get(a.id)?.position ?? 999) - (rank.get(b.id)?.position ?? 999));
+  const fits = mains.filter((o) => !rank.get(o.id)?.excluded);
+  const tooLong = mains.filter((o) => rank.get(o.id)?.excluded);
   const sides = useMemo(() => options.filter((o) => o.kind === "side"), [options]);
   const main = options.find((o) => o.id === mainId);
 
@@ -53,7 +59,10 @@ export function RecipePicker({
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-muted">{formatDay(night.date, "long")}</p>
             <h2 className="text-2xl font-bold">{step === "main" ? "What's for dinner?" : "Any sides?"}</h2>
-            <p className="text-sm text-muted">{TIME_BUDGETS[night.timeBudget].short} · {TIME_BUDGETS[night.timeBudget].hint}</p>
+            <p className="text-sm text-muted">
+              {TIME_BUDGETS[night.timeBudget].short} · {TIME_BUDGETS[night.timeBudget].hint}
+              {favoredName && step === "main" ? ` · 🎯 ${favoredName}'s turn` : ""}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full text-2xl text-muted hover:bg-surface-muted" aria-label="Close">
             ×
@@ -72,8 +81,9 @@ export function RecipePicker({
             />
             <div className="-mx-2 flex-1 overflow-y-auto px-2">
               <OptionList
-                title="Fits tonight"
+                title="Best fits tonight"
                 items={fits}
+                rank={rank}
                 selectedId={mainId}
                 night={night}
                 plannedThisWeek={plannedThisWeek}
@@ -84,8 +94,9 @@ export function RecipePicker({
               />
               {tooLong.length > 0 ? (
                 <OptionList
-                  title="Needs more time than tonight has"
+                  title="Doesn't fit tonight"
                   items={tooLong}
+                  rank={rank}
                   selectedId={mainId}
                   night={night}
                   plannedThisWeek={plannedThisWeek}
@@ -146,9 +157,11 @@ function OptionList({
   muted = false,
   onSelect,
   plannedThisWeek,
+  rank,
 }: {
   title: string;
   items: RecipeOption[];
+  rank: Map<string, { reason: string | null; excluded: string | null; position: number }>;
   selectedId: string | null;
   night: NightView;
   plannedThisWeek: Map<string, string>;
@@ -183,6 +196,10 @@ function OptionList({
                   </span>
                   {alsoOn ? (
                     <span className="block text-xs font-semibold text-mustard">Already on {formatDay(alsoOn)} this week</span>
+                  ) : rank.get(item.id)?.excluded ? (
+                    <span className="block text-xs font-semibold text-tomato-strong">{rank.get(item.id)!.excluded}</span>
+                  ) : rank.get(item.id)?.reason ? (
+                    <span className="block text-xs font-semibold text-plum">✨ {rank.get(item.id)!.reason}</span>
                   ) : null}
                 </span>
                 {item.healthCategory === "healthy" ? <Badge tone="basil">Healthy</Badge> : null}

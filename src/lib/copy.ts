@@ -45,6 +45,18 @@ const lines = {
     goofball: ["{name} is coming home in {days}! Roll out the red carpet (or at least a clean plate)."],
     dry: ["{name} is home in {days}. {name} gets first pick."],
   },
+  rateAsk: {
+    goofball: ["Be honest. The broccoli can take it."],
+    dry: ["Be honest. It helps the planner."],
+  },
+  ratePrompt: {
+    goofball: ["How was {dinner}? The chef is nervously waiting.", "Rate {dinner}! Was it a 🤩 or a 😖?"],
+    dry: ["How was {dinner}? Takes ten seconds.", "Quick verdict on {dinner}?"],
+  },
+  suggestIntro: {
+    goofball: ["The dinner robot has thoughts. Beep boop. 🤖"],
+    dry: ["Suggestions, based on who's home and what you've liked."],
+  },
   homeToday: {
     goofball: ["{name} is HOME! The family is complete. Dinner just got 20% louder."],
     dry: ["{name} is home. Welcome back."],

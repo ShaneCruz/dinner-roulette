@@ -1,8 +1,7 @@
-import { and, eq, lt, max } from "drizzle-orm";
 import { db } from "@/db";
-import { plannedMeal } from "@/db/schema";
 import { presenceOn } from "@/lib/presence";
-import { listRecipes } from "@/lib/recipes/store";
+import { assignTurns, rankForNight, type Weather } from "@/lib/suggest/engine";
+import { loadEngineInputs } from "@/lib/suggest/load";
 import { eatersFor, listBumped, loadEaterContext, loadMeals, servingsFor } from "./store";
 import { defaultTimeBudget, weekDates, type NightType, type TimeBudget } from "./week";
 
@@ -22,6 +21,11 @@ export type NightView = {
   servings: number;
   servingsOverridden: boolean;
   notes: string | null;
+  /** Whose turn it is (saved, or who's up next) */
+  favoredMemberId: string | null;
+  suggestionReason: string | null;
+  weather: Weather | null;
+  mealId: string | null;
 };
 
 export type RecipeOption = {
@@ -37,27 +41,30 @@ export type RecipeOption = {
   lastCooked: string | null;
 };
 
+/** How each dinner fits a given night: score order, best reason, or why not. */
+export type NightRanking = { recipeId: string; score: number; reason: string | null; excluded: string | null }[];
+
 /** Everything the week board needs, for the week starting `weekStart`. */
 export async function loadWeekView(weekStart: string) {
   const dates = weekDates(weekStart);
-  const [meals, context, recipes, lastCookedRows, bumped] = await Promise.all([
+  const [meals, eaterContext, engine, bumped] = await Promise.all([
     loadMeals(db, dates[0], dates[6]),
     loadEaterContext(db, dates[0], dates[6]),
-    listRecipes(db),
-    db
-      .select({ recipeId: plannedMeal.recipeId, last: max(plannedMeal.date) })
-      .from(plannedMeal)
-      .where(and(eq(plannedMeal.status, "cooked"), lt(plannedMeal.date, dates[0])))
-      .groupBy(plannedMeal.recipeId),
+    loadEngineInputs(db, weekStart),
     listBumped(db),
   ]);
 
-  const lastCooked = new Map(lastCookedRows.map((r) => [r.recipeId, r.last]));
+  const turns = assignTurns(
+    engine.nights.map((n) => ({ ...n })),
+    engine.context.members,
+    engine.history,
+    engine.firstNightHome,
+  );
 
   const nights: NightView[] = dates.map((date) => {
     const meal = meals.get(date);
-    const home = context.members.filter((m) => presenceOn(m, context.ranges, date).presence === "home");
-    const eating = eatersFor(context, date, meal?.eaterIds);
+    const home = eaterContext.members.filter((m) => presenceOn(m, eaterContext.ranges, date).presence === "home");
+    const eating = eatersFor(eaterContext, date, meal?.eaterIds);
     return {
       date,
       nightType: meal?.nightType ?? "cook",
@@ -71,10 +78,32 @@ export async function loadWeekView(weekStart: string) {
       servings: servingsFor({ servings: meal?.servings ?? null }, eating.length),
       servingsOverridden: meal?.servings != null,
       notes: meal?.notes ?? null,
+      favoredMemberId: meal?.favoredMemberId ?? turns.get(date)?.memberId ?? null,
+      suggestionReason: meal?.suggestionReason ?? null,
+      weather: engine.weather.get(date) ?? null,
+      mealId: meal?.id ?? null,
     };
   });
 
-  const options: RecipeOption[] = recipes.map((r) => ({
+  // Rank every dinner for every night so the picker can sort and explain.
+  const rankings: Record<string, NightRanking> = {};
+  for (const night of nights) {
+    const engineNight = {
+      date: night.date,
+      eaterIds: night.eatingIds,
+      budget: night.timeBudget,
+      weather: night.weather,
+      favoredMemberId: night.favoredMemberId,
+    };
+    rankings[night.date] = rankForNight(engineNight, engine.context, engine.chosen).map((r) => ({
+      recipeId: r.recipeId,
+      score: Number.isFinite(r.score) ? r.score : -99,
+      reason: r.reasons[0] ?? null,
+      excluded: r.excluded,
+    }));
+  }
+
+  const options: RecipeOption[] = engine.context.recipes.map((r) => ({
     id: r.id,
     slug: r.slug,
     title: r.title,
@@ -84,8 +113,31 @@ export async function loadWeekView(weekStart: string) {
     spiceLevel: r.spiceLevel,
     healthCategory: r.healthCategory,
     seasonFit: r.seasonFit,
-    lastCooked: lastCooked.get(r.id) ?? null,
+    lastCooked: r.lastCooked,
   }));
+  // Drafts and archived recipes aren't suggested, but a night might still use one.
+  for (const night of nights) {
+    for (const id of [night.recipeId, ...night.sideRecipeIds]) {
+      if (id && !options.some((o) => o.id === id)) {
+        const missing = await db.query.recipe.findFirst({ where: (r, { eq }) => eq(r.id, id) });
+        if (missing) {
+          options.push({
+            id: missing.id,
+            slug: missing.slug,
+            title: missing.title,
+            kind: missing.kind,
+            activeMinutes: missing.activeMinutes,
+            totalMinutes: missing.totalMinutes,
+            spiceLevel: missing.spiceLevel,
+            healthCategory: missing.healthCategory,
+            seasonFit: missing.seasonFit,
+            lastCooked: null,
+          });
+        }
+      }
+    }
+  }
+  options.sort((a, b) => a.title.localeCompare(b.title));
 
-  return { dates, nights, options, bumped };
+  return { dates, nights, options, bumped, rankings };
 }

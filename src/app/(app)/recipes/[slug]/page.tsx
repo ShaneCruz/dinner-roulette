@@ -13,7 +13,9 @@ import {
   SEASON_LABELS,
 } from "@/lib/recipes/schema";
 import { getRecipe } from "@/lib/recipes/store";
-import { requireActingMember } from "@/lib/session";
+import { ratingsForRecipe } from "@/lib/ratings/store";
+import { getActiveMembers, requireActingMember } from "@/lib/session";
+import { RatingsSummary } from "@/components/ratings-summary";
 import { archiveRecipe } from "../actions";
 import { RecipeView } from "./recipe-view";
 
@@ -27,7 +29,11 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const recipe = await getRecipe(db, { slug: (await params).slug });
   if (!recipe) notFound();
 
-  const audience = await loadAudience();
+  const [audience, ratings, members] = await Promise.all([
+    loadAudience(),
+    ratingsForRecipe(db, recipe.id),
+    getActiveMembers(),
+  ]);
   const sides =
     recipe.pairsWith.length > 0
       ? await db
@@ -111,6 +117,8 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         heatFor={heatFor}
         sides={sides}
       />
+
+      <RatingsSummary ratings={ratings} members={members} />
 
       {recipe.notes ? (
         <section className="mt-8">

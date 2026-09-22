@@ -17,6 +17,9 @@ import {
   upcomingHomecomings,
 } from "@/lib/presence";
 import { loadPresenceRanges } from "@/lib/presence-data";
+import { mealsNeedingRatings } from "@/lib/ratings/store";
+import { eatersFor, loadEaterContext } from "@/lib/plan/store";
+import { formatDay } from "@/lib/plan/week";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { MadeItButton } from "./tonight-actions";
 
@@ -57,6 +60,18 @@ export default async function HomePage() {
   const exceptions = upcomingExceptions(members, ranges, today);
   const memberName = (id: string) => members.find((m) => m.id === id)?.name ?? "Someone";
 
+  // Dinners from the last two days that still need ratings from someone who ate.
+  const recentCooked = await mealsNeedingRatings(db, addDays(today, -2), today);
+  const ratingContext = recentCooked.length ? await loadEaterContext(db, addDays(today, -2), today) : null;
+  const toRate = recentCooked
+    .map((meal) => {
+      const eaters = ratingContext ? eatersFor(ratingContext, meal.date, meal.eaterIds) : [];
+      const missing = eaters.filter((e) => !meal.ratedMemberIds.includes(e.id));
+      const relevant = acting.role === "parent" ? missing : missing.filter((e) => e.id === acting.id);
+      return { meal, missing: relevant };
+    })
+    .filter((x) => x.missing.length > 0);
+
   return (
     <div className="space-y-6">
       <div>
@@ -70,6 +85,23 @@ export default async function HomePage() {
         </p>
         <h1 className="mt-1 text-3xl font-bold sm:text-4xl">{greeting}</h1>
       </div>
+
+      {toRate.map(({ meal, missing }) => (
+        <Card key={meal.id} className="border-plum/30 bg-plum-soft">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-bold">{say("ratePrompt", tone, { dinner: meal.title }, meal.date.charCodeAt(9))}</p>
+              <p className="text-sm text-muted">
+                {formatDay(meal.date)} ·{" "}
+                {acting.role === "parent"
+                  ? `Still waiting on ${missing.map((m) => m.name).join(", ")}`
+                  : "Your vote counts"}
+              </p>
+            </div>
+            <ButtonLink href={`/rate/${meal.id}`}>⭐ Rate it</ButtonLink>
+          </div>
+        </Card>
+      ))}
 
       {homecomings.map(({ member, daysUntil, range }) => (
         <Card key={range.id} className="border-mustard bg-mustard-soft">

@@ -16,6 +16,8 @@ import {
 import { weekStartFor } from "@/lib/plan/week";
 import { requireParentMember } from "@/lib/session";
 import { getOrCreateWeekPlan } from "@/lib/plan/store";
+import { todayIn } from "@/lib/presence";
+import { applySuggestions } from "@/lib/suggest/apply";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -51,6 +53,8 @@ export async function updateNight(date: string, patch: NightPatch): Promise<{ er
   if (values.recipeId) {
     values.nightType = "cook";
     values.status ??= "planned";
+    // A dinner someone picked by hand isn't a suggestion any more.
+    values.suggestionReason = null;
   }
   if (values.nightType && values.nightType !== "cook") {
     values.recipeId = null;
@@ -96,5 +100,26 @@ export async function placeBumpedAction(bumpedId: string, date: string) {
 export async function discardBumpedAction(bumpedId: string) {
   await requireParentMember();
   await discardBumped(db, bumpedId);
+  refresh();
+}
+
+/** Fills the week's open cooking nights with suggestions. */
+export async function suggestWeekAction(weekStart: string): Promise<{ error: string } | { filled: number }> {
+  const { settings } = await requireParentMember();
+  if (!dateSchema.safeParse(weekStart).success) return { error: "Unknown week." };
+  const filled = await applySuggestions(db, weekStart, todayIn(settings.timezone), settings.weekStartsOn);
+  refresh();
+  return { filled };
+}
+
+/** Swaps one night's dinner for the next-best idea. */
+export async function anotherIdeaAction(date: string): Promise<{ error: string } | void> {
+  const { settings } = await requireParentMember();
+  if (!dateSchema.safeParse(date).success) return { error: "Unknown night." };
+  const weekStart = weekStartFor(date, settings.weekStartsOn);
+  const filled = await applySuggestions(db, weekStart, todayIn(settings.timezone), settings.weekStartsOn, {
+    onlyDate: date,
+  });
+  if (!filled) return { error: "Out of ideas for that night. Try loosening the time or who's eating." };
   refresh();
 }
