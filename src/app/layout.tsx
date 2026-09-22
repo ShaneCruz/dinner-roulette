@@ -19,6 +19,15 @@ export const metadata: Metadata = {
   description: "Family dinners, decided. Plans the week, builds the grocery list, and spins the wheel.",
   applicationName: "Dinner Roulette",
   appleWebApp: { capable: true, title: "Dinner Roulette", statusBarStyle: "default" },
+  // Plain files at the standard addresses: iPhones (especially adding from
+  // Chrome) show a letter tile when the icon link carries a query string.
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
