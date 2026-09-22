@@ -8,6 +8,9 @@ import { PlanBoard } from "./plan-board";
 
 export const metadata = { title: "This week" };
 
+// Writing a new side recipe with Claude can take a minute.
+export const maxDuration = 300;
+
 export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
   const { settings, acting } = await requireActingMember();
   const today = todayIn(settings.timezone);
