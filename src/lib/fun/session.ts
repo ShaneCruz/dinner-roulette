@@ -17,6 +17,8 @@ export type SessionCard = {
   spiceLevel: number;
   healthCategory: "healthy" | "balanced" | "comfort";
   isNew: boolean;
+  calories: number | null;
+  proteinG: number | null;
 };
 
 /**
@@ -63,6 +65,8 @@ export async function loadSession(db: Database, weekStart: string, today: string
       spiceLevel: r.spiceLevel,
       healthCategory: r.healthCategory,
       isNew: !engineById.get(r.id)?.lastCooked,
+      calories: r.nutrition?.calories ?? null,
+      proteinG: r.nutrition?.proteinG ?? null,
     }));
 
   const eatingIds = new Set(open.flatMap((n) => n.eaterIds));

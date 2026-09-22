@@ -14,6 +14,7 @@
 import { daysBetween } from "@/lib/presence";
 import { ingredientMatches } from "@/lib/recipes/audience";
 import { fitsBudget, type TimeBudget } from "@/lib/plan/week";
+import type { Nutrition } from "@/db/schema";
 
 export type EngineRecipe = {
   id: string;
@@ -36,6 +37,8 @@ export type EngineRecipe = {
   variants: { kind: string; label: string; avoids: string[] }[];
   /** Most recent cooked date before the week being planned */
   lastCooked: string | null;
+  /** Per-serving estimate, when known (display only) */
+  nutrition?: Nutrition | null;
 };
 
 export type EngineMember = {

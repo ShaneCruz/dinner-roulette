@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { loadFamilyBrief } from "@/lib/ai/brief";
 import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
 import { generateRecipe, importRecipe, inventNewMeal, normalizeAiRecipe, type ImportSource } from "@/lib/ai/recipes";
 import { saveDraftRecipe } from "@/lib/ai/save";
-import { listRecipes } from "@/lib/recipes/store";
+import { ensureNutrition } from "@/lib/nutrition-store";
+import { getRecipe, listRecipes } from "@/lib/recipes/store";
 import { season } from "@/lib/suggest/engine";
 import { todayIn } from "@/lib/presence";
 import { getActingMember, getFamilySettings, getParentSession } from "@/lib/session";
@@ -96,6 +97,14 @@ export async function POST(request: Request) {
       notes: normalized.notes,
       warnings: normalized.warnings,
       createdByMemberId: acting.id,
+    });
+    after(async () => {
+      try {
+        const saved = await getRecipe(db, { slug });
+        if (saved) await ensureNutrition(db, saved.id);
+      } catch (error) {
+        console.error("Nutrition estimate failed", error);
+      }
     });
     return NextResponse.json({ slug, warnings: normalized.warnings });
   } catch (error) {

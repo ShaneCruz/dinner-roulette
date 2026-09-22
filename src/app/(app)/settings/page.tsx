@@ -1,14 +1,30 @@
-import { PageHeader } from "@/components/ui";
+import { Card, PageHeader } from "@/components/ui";
+import { DeviceReminders } from "@/components/device-reminders";
+import { DEFAULT_REMINDERS } from "@/db/schema";
+import { vapidPublicKey } from "@/lib/push";
+import { ReminderSettings } from "./reminder-settings";
 import { requireParentMember } from "@/lib/session";
 import { SettingsForm } from "./settings-form";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const { settings } = await requireParentMember();
+  const { settings, acting } = await requireParentMember();
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title="Settings" subtitle="How the planner thinks about your week." />
+      <Card className="space-y-2">
+        <h2 className="text-xl font-bold">📱 Reminders on this phone</h2>
+        <DeviceReminders vapidKey={vapidPublicKey()} name={acting.name} />
+      </Card>
+      <ReminderSettings
+        initial={{
+          dinnerTime: settings.dinnerTime,
+          autopilotEnabled: settings.autopilotEnabled,
+          autopilotDay: settings.autopilotDay,
+          reminders: { ...DEFAULT_REMINDERS, ...settings.reminders },
+        }}
+      />
       <SettingsForm
         initial={{
           familyName: settings.familyName,

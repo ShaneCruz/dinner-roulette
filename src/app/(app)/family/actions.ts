@@ -149,3 +149,19 @@ export async function deleteAvailability(memberId: string, id: string) {
     .where(and(eq(memberAvailability.id, id), eq(memberAvailability.memberId, memberId)));
   revalidatePath("/", "layout");
 }
+
+/** Adds the date ranges a parent kept after reviewing an imported calendar. */
+export async function importAvailability(
+  memberId: string,
+  ranges: z.input<typeof availabilitySchema>[],
+): Promise<Result | { added: number }> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(memberId).success || ranges.length > 60) return { error: "Couldn't add those dates." };
+  const parsed = ranges.map((r) => availabilitySchema.safeParse(r));
+  const bad = parsed.find((p) => !p.success);
+  if (bad && !bad.success) return { error: firstIssue(bad.error) };
+  const rows = parsed.flatMap((p) => (p.success ? [{ memberId, ...p.data }] : []));
+  if (rows.length) await db.insert(memberAvailability).values(rows);
+  revalidatePath("/", "layout");
+  return { added: rows.length };
+}

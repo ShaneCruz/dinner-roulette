@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { IngredientInput, StepInput } from "@/lib/recipes/schema";
+import type { IngredientInput, Recipe, StepInput } from "@/lib/recipes/schema";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -82,6 +82,22 @@ export const verification = pgTable("verification", {
 export type GrillCaps = { summer: number; shoulder: number; winter: number };
 
 /** Single row (id = 1) holding family-wide settings. */
+/** Which phone reminders the family wants. */
+export type ReminderPrefs = {
+  /** Night before: take the meat out of the freezer */
+  thaw: boolean;
+  /** "Start cooking now" based on the recipe's total time */
+  start: boolean;
+  /** After dinner: rate it */
+  rate: boolean;
+  /** Friday: next week was planned */
+  autopilot: boolean;
+  /** A recipe tweak is ready to review */
+  proposals: boolean;
+};
+
+export const DEFAULT_REMINDERS: ReminderPrefs = { thaw: true, start: true, rate: true, autopilot: true, proposals: true };
+
 export const familySettings = pgTable(
   "family_settings",
   {
@@ -103,6 +119,12 @@ export const familySettings = pgTable(
     chaosSliceEnabled: boolean("chaos_slice_enabled").notNull().default(true),
     /** 0 = Sunday … 6 = Saturday; the planning week starts on this day */
     weekStartsOn: integer("week_starts_on").notNull().default(0),
+    /** When dinner is usually on the table, "HH:MM" in the family's timezone */
+    dinnerTime: text("dinner_time").notNull().default("18:00"),
+    /** Plan next week automatically on autopilotDay (0 = Sunday … 6 = Saturday) */
+    autopilotEnabled: boolean("autopilot_enabled").notNull().default(true),
+    autopilotDay: integer("autopilot_day").notNull().default(5),
+    reminders: jsonb("reminders").$type<ReminderPrefs>().notNull().default(DEFAULT_REMINDERS),
     setupCompletedAt: timestamp("setup_completed_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -205,6 +227,19 @@ export const recipeStatus = pgEnum("recipe_status", ["draft", "approved"]);
 export const seasonFit = pgEnum("season_fit", ["any", "warm", "cold"]);
 export const healthCategory = pgEnum("health_category", ["healthy", "balanced", "comfort"]);
 
+/** Approximate nutrition for one serving, estimated by AI from the ingredients. */
+export type Nutrition = {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fiberG: number;
+  fatG: number;
+  sodiumMg: number;
+  /** A short caveat, e.g. "assumes 80/20 ground beef" */
+  note: string | null;
+  estimatedAt: string;
+};
+
 export const recipe = pgTable(
   "recipe",
   {
@@ -227,6 +262,8 @@ export const recipe = pgTable(
     cooldownDays: integer("cooldown_days"),
     steps: jsonb("steps").$type<StepInput[]>().notNull(),
     pairsWith: text("pairs_with").array().notNull().default(sql`'{}'::text[]`),
+    /** Per serving; null until estimated (and cleared when the recipe changes) */
+    nutrition: jsonb("nutrition").$type<Nutrition>(),
     source: recipeSource("source").notNull(),
     sourceUrl: text("source_url"),
     status: recipeStatus("status").notNull().default("approved"),
@@ -306,6 +343,8 @@ export const weekPlan = pgTable(
     /** First night of the planning week */
     weekStart: date("week_start").notNull(),
     notes: text("notes"),
+    /** When autopilot planned this week (so it only happens once) */
+    autopilotAt: timestamp("autopilot_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex("week_plan_start_idx").on(t.weekStart)],
@@ -566,4 +605,64 @@ export const wheelSpin = pgTable("wheel_spin", {
   /** Set when the chaos slice came up */
   chaos: text("chaos"),
   ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// Recipes that learn, reminders, and autopilot
+// ---------------------------------------------------------------------------
+
+export const proposalStatus = pgEnum("proposal_status", ["pending", "accepted", "dismissed"]);
+
+/** An AI-suggested change to a recipe, from ratings or a parent's request, waiting for a parent. */
+export const recipeProposal = pgTable(
+  "recipe_proposal",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    /** What prompted it: the family's ratings, or a parent asking */
+    trigger: text("trigger").$type<"ratings" | "request">().notNull(),
+    request: text("request"),
+    summary: text("summary").notNull(),
+    changes: text("changes").array().notNull().default(sql`'{}'::text[]`),
+    proposed: jsonb("proposed").$type<Recipe>().notNull(),
+    basedOnRatingIds: uuid("based_on_rating_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    status: proposalStatus("status").notNull().default("pending"),
+    createdByMemberId: uuid("created_by_member_id").references(() => member.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("recipe_proposal_recipe_idx").on(t.recipeId, t.status)],
+);
+
+/** The recipe as it was before an accepted change, so it can be undone. */
+export const recipeRevision = pgTable("recipe_revision", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  recipeId: uuid("recipe_id")
+    .notNull()
+    .references(() => recipe.id, { onDelete: "cascade" }),
+  snapshot: jsonb("snapshot").$type<Recipe>().notNull(),
+  reason: text("reason").notNull(),
+  ...timestamps,
+});
+
+/** A phone or browser that asked for reminders, and whose it is. */
+export const pushSubscription = pgTable("push_subscription", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  memberId: uuid("member_id")
+    .notNull()
+    .references(() => member.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  failures: integer("failures").notNull().default(0),
+  ...timestamps,
+});
+
+/** Reminders already sent, so each one goes out once. */
+export const notificationLog = pgTable("notification_log", {
+  key: text("key").primaryKey(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -462,6 +462,7 @@ function SwipeRound({
             <Badge tone={HEALTH[current.healthCategory].tone}>{HEALTH[current.healthCategory].label}</Badge>
             <Badge>⏱️ {current.activeMinutes} min{current.totalMinutes > current.activeMinutes + 30 ? ` (${Math.round(current.totalMinutes / 60)}h total)` : ""}</Badge>
             {current.spiceLevel > 0 ? <SpiceMeter level={current.spiceLevel} /> : null}
+            {current.calories ? <Badge>🔥 ≈{current.calories} cal · {current.proteinG}g protein</Badge> : null}
           </div>
           <Link href={`/recipes/${current.slug}`} target="_blank" className="inline-block text-sm font-semibold text-tomato underline">
             See the recipe

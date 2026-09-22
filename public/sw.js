@@ -2,7 +2,7 @@
 // pages) opening in a store with no signal. Changes made offline are queued by
 // the page itself and synced when the connection returns.
 
-const VERSION = "v1";
+const VERSION = "v2";
 const PAGES = `pages-${VERSION}`;
 const ASSETS = `assets-${VERSION}`;
 
@@ -72,13 +72,47 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// Tapping a timer notification brings the recipe back to the front.
+// Reminders from the server (start cooking, thaw, rate it, next week planned).
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "Dinner Roulette", body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Dinner Roulette", {
+      body: data.body || "",
+      tag: data.tag,
+      icon: "/icon",
+      badge: "/icon",
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+// Tapping a notification opens the page it's about (or brings a cooking
+// timer's recipe back to the front).
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const target = event.notification.data && event.notification.data.url;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      const recipe = windows.find((w) => new URL(w.url).pathname.startsWith("/recipes/")) ?? windows[0];
+      if (target) {
+        const url = new URL(target, self.location.origin).href;
+        const open = windows.find((w) => w.url === url);
+        if (open) return open.focus();
+        if (windows[0] && "navigate" in windows[0]) {
+          await windows[0].focus();
+          return windows[0].navigate(url);
+        }
+        return self.clients.openWindow(url);
+      }
+      const recipe = windows.find((w) => {
+        const path = new URL(w.url).pathname;
+        return path.startsWith("/recipes/") || path.startsWith("/cook/");
+      }) ?? windows[0];
       if (recipe) return recipe.focus();
       return self.clients.openWindow("/");
     })(),
