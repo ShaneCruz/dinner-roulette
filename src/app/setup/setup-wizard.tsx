@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import { MemberFields, Toggle } from "@/components/member-fields";
 import { Avatar, Button, Card, Field, cx, inputClass } from "@/components/ui";
 import {
@@ -17,6 +17,41 @@ type Starter = { slug: string; title: string; kind: "main" | "side" };
 const STEPS = ["Family", "People", "Kitchen", "Recipes"] as const;
 const DEFAULT_TIMEZONE = "America/Chicago";
 const noopSubscribe = () => () => {};
+
+// Answers are kept in the browser as you go, so a reload (or a new version
+// of the app landing mid-setup) never means typing everything again.
+const DRAFT_KEY = "dinner-roulette:setup-draft";
+
+type Draft = {
+  step: number;
+  settings: SettingsInput;
+  members: MemberInput[];
+  starterSlugs: string[];
+  pickedZone: string | null;
+};
+
+function writeDraft(draft: Draft | null) {
+  try {
+    if (draft) localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Private browsing or storage disabled: setup still works, just without drafts.
+  }
+}
+
+// Read once per page load, so saving as you type doesn't re-offer the draft.
+let draftAtLoad: Draft | null | undefined;
+function getDraftAtLoad(): Draft | null {
+  if (draftAtLoad === undefined) {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      draftAtLoad = raw ? (JSON.parse(raw) as Draft) : null;
+    } catch {
+      draftAtLoad = null;
+    }
+  }
+  return draftAtLoad;
+}
 
 export function SetupWizard({
   starters,
@@ -58,6 +93,25 @@ export function SetupWizard({
   const [pickedZone, setPickedZone] = useState<string | null>(null);
   const timezone = pickedZone ?? browserZone;
 
+  const savedDraft = useSyncExternalStore(noopSubscribe, getDraftAtLoad, () => null);
+  const [draftHandled, setDraftHandled] = useState(false);
+  const offerDraft = savedDraft !== null && !draftHandled;
+
+  useEffect(() => {
+    if (offerDraft) return; // don't overwrite the saved draft before they decide
+    writeDraft({ step, settings, members, starterSlugs, pickedZone });
+  }, [offerDraft, step, settings, members, starterSlugs, pickedZone]);
+
+  function restoreDraft(draft: Draft) {
+    setStep(Math.min(draft.step, STEPS.length - 1));
+    setSettings(draft.settings);
+    setMembers(draft.members);
+    setStarterSlugs(draft.starterSlugs);
+    setPickedZone(draft.pickedZone);
+    setEditing(null);
+    setDraftHandled(true);
+  }
+
   const canContinue = [
     settings.familyName.trim().length > 0,
     members.length > 0 && members.every((m) => m.name.trim()),
@@ -72,12 +126,18 @@ export function SetupWizard({
       return;
     }
     startTransition(async () => {
-      const result = await completeSetup({
-        settings: { ...settings, timezone },
-        members,
-        starterSlugs,
-      });
-      if (result?.error) setError(result.error);
+      try {
+        const result = await completeSetup({
+          settings: { ...settings, timezone },
+          members,
+          starterSlugs,
+        });
+        if (result?.error) setError(result.error);
+      } catch {
+        setError(
+          "That didn't save. Your answers are kept on this device — reload the page and tap Finish again.",
+        );
+      }
     });
   }
 
@@ -111,6 +171,20 @@ export function SetupWizard({
           </li>
         ))}
       </ol>
+
+      {offerDraft ? (
+        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 border-mustard bg-mustard-soft">
+          <p className="font-semibold">You started setup earlier. Pick up where you left off?</p>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={() => restoreDraft(savedDraft)}>
+              Restore my answers
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setDraftHandled(true)}>
+              Start over
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="p-6">
         {step === 0 ? (

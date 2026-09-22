@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { saveRecipeAction } from "@/app/(app)/recipes/actions";
 import { Button, Card, Field, cx, inputClass } from "@/components/ui";
+import { emptyIngredient, emptyVariant } from "@/lib/recipes/blank";
 import {
   COOK_METHODS,
   COOK_METHOD_LABELS,
@@ -46,47 +47,6 @@ const UNIT_LABELS: Record<(typeof UNITS)[number], string> = {
   to_taste: "to taste",
 };
 
-const emptyIngredient = (): IngredientInput => ({
-  name: "",
-  quantity: 1,
-  unit: "whole",
-  section: "produce",
-  perishable: true,
-});
-
-const emptyVariant = (): VariantInput => ({
-  kind: "healthy",
-  label: "",
-  description: "",
-  removes: [],
-  adds: [],
-  extraSteps: [],
-  extraActiveMinutes: 0,
-  avoids: [],
-});
-
-export const blankRecipe = (): Recipe => ({
-  slug: "new-recipe",
-  title: "",
-  description: "",
-  kind: "main",
-  cuisine: "American",
-  tags: [],
-  method: "stovetop",
-  activeMinutes: 20,
-  totalMinutes: 30,
-  baseServings: 5,
-  spiceLevel: 0,
-  spiceSplit: null,
-  seasonFit: "any",
-  indoorMethod: null,
-  healthCategory: "balanced",
-  cooldownDays: null,
-  ingredients: [emptyIngredient()],
-  steps: [{ text: "" }],
-  variants: [],
-  pairsWith: [],
-});
 
 export function RecipeForm({
   initial,
