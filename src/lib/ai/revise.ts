@@ -43,6 +43,8 @@ export async function reviseRecipe(recipe: Recipe, feedback: Feedback[], request
     : "(no ratings yet)";
 
   const result = await structured({
+    feature: "recipe tweak",
+    tier: "fast",
     system: `You improve a family's recipes based on how they rated them. Make the smallest changes that fix what people didn't like, and keep everything they liked. Examples: "too spicy" means less heat in the base (keep heat as an add-on in spiceSplit); "too bland" means more seasoning, acid, or salt; "dry" means less cooking time or more sauce; "too much work" means fewer steps or shortcuts; "mushy" means shorter cooking or adding things later. If ratings disagree (some love it as-is), prefer changes that give each person what they want (variants, toppings on the side) over changing the base. When a parent asks for a specific change, do exactly that and adjust amounts and steps to match.
 
 Return the complete revised recipe (every ingredient and step, not just the changes). Keep the title unless the dish changed. If nothing is worth changing, set worthChanging=false and recipe=null.

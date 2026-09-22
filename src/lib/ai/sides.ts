@@ -30,6 +30,8 @@ export async function recommendSides(
   alreadyChosen: string[],
 ): Promise<SideSuggestion[]> {
   const result = await structured({
+    feature: "side ideas",
+    tier: "fast",
     system: `You suggest side dishes for a family's weeknight dinner. Classic, easy pairings the whole family will eat: garlic bread or a Caesar salad with pasta, corn and slaw with barbecue, rice and beans with tacos, roasted broccoli with chicken. Most sides should take 15 minutes or less of hands-on time; store-bought shortcuts are welcome. Balance the plate: with a heavy or comfort main, include a vegetable or salad. Don't suggest anything that duplicates what's already in the main dish (no potatoes with pot roast that has potatoes in it).
 
 Use the family's existing sides when one fits (set existingSlug to its slug exactly). If fewer than two of their sides fit well, add new ideas (existingSlug null). Mix in at least one new idea when their side list is short, so it can grow.
@@ -58,6 +60,7 @@ export async function writeSideRecipe(title: string, forMain: string, brief: Fam
   const result = await generateRecipe(
     `${title}, a quick side dish to serve with ${forMain}. This is a SIDE DISH: set kind to "side", keep it simple (store-bought shortcuts are fine), and leave pairsWith empty.`,
     brief,
+    { tier: "fast", feature: "side recipe" },
   );
   if (!result.found || !result.recipe) return null;
   const { recipe } = normalizeAiRecipe({ ...result.recipe, kind: "side", pairsWith: [] });

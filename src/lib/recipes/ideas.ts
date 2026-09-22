@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import type { Database } from "@/db";
 import { recipe, recipeIdea } from "@/db/schema";
 import { loadFamilyBrief } from "@/lib/ai/brief";
+import { AiBudgetError } from "@/lib/ai/errors";
 import { suggestDinnerIdeas, writeIdeaRecipe } from "@/lib/ai/ideas";
 import { ensureNutrition } from "@/lib/nutrition-store";
 import { season } from "@/lib/suggest/engine";
@@ -86,6 +87,11 @@ export async function writeAcceptedIdea(db: Database, id: string): Promise<void>
     await db.update(recipeIdea).set({ status: "added", recipeId, error: null }).where(eq(recipeIdea.id, id));
     await ensureNutrition(db, recipeId).catch((error) => console.error("Nutrition estimate failed", error));
   } catch (error) {
+    if (error instanceof AiBudgetError) {
+      // Not a failure: it waits (as "writing") until there's budget, and the scheduler finishes it.
+      await db.update(recipeIdea).set({ error: "waiting for budget" }).where(eq(recipeIdea.id, id));
+      return;
+    }
     console.error("Writing an idea failed", error);
     await db
       .update(recipeIdea)

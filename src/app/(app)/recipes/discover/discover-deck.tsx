@@ -29,7 +29,6 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
   const [flash, setFlash] = useState<string | null>(null);
   const start = useRef<number | null>(null);
   const decided = useRef(new Set<string>());
-  const asked = useRef(false);
 
   const current = queue[0] ?? null;
   const writing = recent.some((r) => r.status === "writing");
@@ -48,16 +47,6 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
       setDealing(false);
     }
   }
-
-  // Keep the deck stocked: deal more when it runs low.
-  useEffect(() => {
-    if (queue.length <= 2 && !asked.current) {
-      asked.current = true;
-      void dealMore();
-    }
-    if (queue.length > 2) asked.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queue.length]);
 
   useEffect(() => {
     if (!dealing) return;
@@ -157,7 +146,8 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
           <p className="text-4xl" aria-hidden>
             🃏
           </p>
-          <p className="mt-2 font-semibold">{dealing ? DEALING[line % DEALING.length] : "Out of ideas for now."}</p>
+          <p className="mt-2 font-semibold">{dealing ? DEALING[line % DEALING.length] : "No ideas in the deck."}</p>
+          {!dealing ? <p className="text-sm text-muted">Each batch of 8 costs about a penny or two of AI.</p> : null}
           {!dealing ? (
             <Button type="button" className="mt-3" onClick={() => void dealMore()}>
               Deal more ideas
@@ -177,9 +167,16 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
             </Button>
           </div>
           <p className="text-center text-xs text-muted">
-            Swipe right to add, left to pass. {queue.length > 1 ? `${queue.length - 1} more in the deck.` : ""}
+            Swipe right to add, left to pass. {queue.length > 1 ? `${queue.length - 1} more in the deck.` : "Last one!"}
             {dealing ? " Dealing more…" : ""}
           </p>
+          {queue.length <= 2 && !dealing ? (
+            <p className="text-center">
+              <button type="button" className="text-sm font-semibold text-tomato underline" onClick={() => void dealMore()}>
+                Deal 8 more ideas
+              </button>
+            </p>
+          ) : null}
         </>
       ) : null}
 

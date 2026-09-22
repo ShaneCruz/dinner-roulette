@@ -25,6 +25,8 @@ export async function estimateNutrition(recipe: Pick<Recipe, "title" | "baseServ
     return `- ${amount} ${i.name}${i.note ? ` (${i.note})` : ""}${i.optional ? " [optional, leave out]" : ""}`;
   });
   const result = await structured({
+    feature: "nutrition",
+    tier: "fast",
     system:
       "You estimate nutrition for home recipes from their ingredient lists, like a careful dietitian using USDA reference values. Assume common grocery-store versions (e.g. 85% lean ground beef unless stated, whole milk unless stated), cooked portions as served, and that optional ingredients are left out. Count oil used for cooking, not oil discarded. Round sensibly. Give values for ONE serving: the whole recipe divided by the number of servings.",
     content: `Recipe: ${recipe.title}\nServings: ${recipe.baseServings}\n\nIngredients:\n${lines.join("\n")}\n\nMethod, briefly: ${recipe.steps
