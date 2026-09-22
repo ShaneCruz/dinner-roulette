@@ -12,7 +12,7 @@ export default async function NewRecipePage() {
   const sides = await listRecipes(db, { kind: "side" });
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="New recipe" subtitle="Type it in. (Soon: paste a link or snap a photo instead.)" />
+      <PageHeader title="New recipe" subtitle="Type it in. Or let AI do the typing: snap a photo or paste a link on the Add a recipe page." />
       <RecipeForm
         initial={blankRecipe()}
         existingId={null}

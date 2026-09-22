@@ -283,3 +283,18 @@ export async function existingSlugs(db: Database, slugs: string[]): Promise<Set<
     .where(inArray(recipe.slug, slugs));
   return new Set(rows.map((r) => r.slug));
 }
+
+export async function deleteRecipe(db: Database, id: string) {
+  await db.delete(recipe).where(eq(recipe.id, id));
+}
+
+/** Other recipes whose titles share a meaningful word, e.g. two chilis. */
+export async function similarRecipes(db: Database, id: string, title: string): Promise<RecipeSummary[]> {
+  const words = title
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((w) => w.length > 3 && !["with", "and", "the", "easy", "best", "night", "slow", "cooker", "grilled", "baked", "sheet", "crispy", "homemade", "family", "quick", "simple", "style", "recipe", "classic", "grandma", "mom's"].includes(w));
+  if (!words.length) return [];
+  const all = await listRecipes(db);
+  return all.filter((r) => r.id !== id && words.some((w) => r.title.toLowerCase().includes(w)));
+}
