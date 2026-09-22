@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
+import { inBackground } from "@/lib/ai/usage";
 import { runScheduledJobs } from "@/lib/scheduler";
 
 // Autopilot and recipe tweaks call Claude, which can take a minute or two.
@@ -16,6 +17,6 @@ function authorized(request: Request): boolean {
 /** Called every 15 minutes by the scheduler (GitHub Actions) and daily by Vercel Cron. */
 export async function GET(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
-  const report = await runScheduledJobs(db);
+  const report = await inBackground(() => runScheduledJobs(db));
   return NextResponse.json(report);
 }

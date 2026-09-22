@@ -22,7 +22,7 @@ import { todayIn } from "@/lib/presence";
 import { applySuggestions } from "@/lib/suggest/apply";
 import { recipe as recipeTable } from "@/db/schema";
 import { loadFamilyBrief } from "@/lib/ai/brief";
-import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
+import { AiBudgetError, aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { recommendSides, writeSideRecipe } from "@/lib/ai/sides";
 import { ensureNutrition } from "@/lib/nutrition-store";
 import { loadMeals } from "@/lib/plan/store";
@@ -160,8 +160,8 @@ async function suggestSides(
     .where(and(eq(recipeTable.kind, "side"), isNull(recipeTable.archivedAt)));
   const chosen = sides.filter((s) => chosenIds.includes(s.id));
 
-  if (!aiEnabled()) {
-    // Without AI: the sides this dinner pairs with, then the rest.
+  // Without AI (or out of budget): the sides this dinner pairs with, then the rest.
+  const fromYourSides = () => {
     const ranked = [...sides].sort((a, b) => Number(main.pairsWith.includes(b.slug)) - Number(main.pairsWith.includes(a.slug)));
     return {
       ideas: ranked
@@ -169,7 +169,8 @@ async function suggestSides(
         .slice(0, 4)
         .map((s) => ({ existingId: s.id, existingSlug: s.slug, title: s.title, why: main.pairsWith.includes(s.slug) ? "A usual pairing" : "From your sides", handsOnMinutes: s.activeMinutes, healthy: s.healthCategory === "healthy" })),
     };
-  }
+  };
+  if (!aiEnabled()) return fromYourSides();
   try {
     const brief = await loadFamilyBrief(db);
     const ideas = await recommendSides(main, brief, chosen.map((c) => c.title));
@@ -180,6 +181,7 @@ async function suggestSides(
       }),
     };
   } catch (error) {
+    if (error instanceof AiBudgetError) return fromYourSides();
     console.error("Side suggestions failed", error);
     return { error: friendlyAiError(error) };
   }

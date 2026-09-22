@@ -3,6 +3,8 @@ import { DeviceReminders } from "@/components/device-reminders";
 import { DEFAULT_REMINDERS } from "@/db/schema";
 import { vapidPublicKey } from "@/lib/push";
 import { ReminderSettings } from "./reminder-settings";
+import { AiBudget } from "./ai-budget";
+import { weekSpending } from "@/lib/ai/usage";
 import { requireParentMember } from "@/lib/session";
 import { SettingsForm } from "./settings-form";
 
@@ -10,9 +12,11 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const { settings, acting } = await requireParentMember();
+  const spending = await weekSpending();
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title="Settings" subtitle="How the planner thinks about your week." />
+      <AiBudget budgetCents={spending.budgetCents} spentCents={spending.spentCents} byFeature={spending.byFeature} />
       <Card className="space-y-2">
         <h2 className="text-xl font-bold">📱 Reminders on this phone</h2>
         <DeviceReminders vapidKey={vapidPublicKey()} name={acting.name} />

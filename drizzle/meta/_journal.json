@@ -71,6 +71,13 @@
       "when": 1790079910067,
       "tag": "0009_source_ratings",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790084508177,
+      "tag": "0010_ai_budget",
+      "breakpoints": true
     }
   ]
 }

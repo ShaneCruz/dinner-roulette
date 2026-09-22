@@ -2,6 +2,10 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
+import { AiBudgetError } from "./errors";
+import { checkBudget, recordUsage } from "./usage";
+
+export { AiBudgetError };
 
 /**
  * The one place the app talks to Claude.
@@ -16,7 +20,15 @@ import type { z } from "zod";
  */
 
 export const MODEL = "claude-opus-5";
+/** Cheap and quick; plenty for estimates, suggestions and simple recipes. */
+export const FAST_MODEL = "claude-haiku-4-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+
+/**
+ * "smart" (Opus) reads photos, PDFs and handwriting and does research;
+ * "fast" (Haiku, about a tenth of the cost) does everything simpler.
+ */
+export type Tier = "smart" | "fast";
 
 export class AiUnavailableError extends Error {
   constructor() {
@@ -40,22 +52,41 @@ function getClient(): Anthropic {
 type Content = Anthropic.Beta.BetaContentBlockParam[] | string;
 
 export async function structured<T extends z.ZodType>(options: {
+  /** What it's for, for the spending report (e.g. "nutrition") */
+  feature: string;
+  tier?: Tier;
   system: string;
   content: Content;
   schema: T;
   effort?: "low" | "medium" | "high";
   maxTokens?: number;
 }): Promise<z.infer<T>> {
-  const response = await getClient().beta.messages.parse({
-    model: MODEL,
-    max_tokens: options.maxTokens ?? 16000,
-    betas: [FALLBACK_BETA],
-    fallbacks: "default",
-    thinking: { type: "adaptive" },
-    output_config: { effort: options.effort ?? "medium", format: zodOutputFormat(options.schema) },
-    system: options.system,
-    messages: [{ role: "user", content: options.content }],
-  });
+  const client = getClient();
+  await checkBudget();
+  const fast = options.tier === "fast";
+  const model = fast ? FAST_MODEL : MODEL;
+  const format = zodOutputFormat(options.schema);
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: options.content }];
+  // Haiku doesn't take adaptive thinking, effort, or refusal fallbacks.
+  const response = fast
+    ? await client.beta.messages.parse({
+        model,
+        max_tokens: Math.min(options.maxTokens ?? 16000, 16000),
+        output_config: { format },
+        system: options.system,
+        messages,
+      })
+    : await client.beta.messages.parse({
+        model,
+        max_tokens: options.maxTokens ?? 16000,
+        betas: [FALLBACK_BETA],
+        fallbacks: "default",
+        thinking: { type: "adaptive" },
+        output_config: { effort: options.effort ?? "medium", format },
+        system: options.system,
+        messages,
+      });
+  await recordUsage(options.feature, model, response.usage);
   if (response.stop_reason === "refusal") throw new AiFailedError("Claude couldn't help with that one.");
   if (response.stop_reason === "max_tokens") throw new AiFailedError("That was too long to finish. Try a shorter recipe.");
   if (!response.parsed_output) throw new AiFailedError("Claude's answer didn't come back in the right shape.");
@@ -68,6 +99,7 @@ export async function structured<T extends z.ZodType>(options: {
  * by re-sending the conversation so it can pick up where it left off.
  */
 export async function research(options: {
+  feature: string;
   system: string;
   prompt: string;
   maxSearches?: number;
@@ -77,8 +109,10 @@ export async function research(options: {
   const sources = new Map<string, string>();
   let text = "";
 
+  const client = getClient();
+  await checkBudget();
   for (let round = 0; round < 4; round++) {
-    const response = await getClient().beta.messages.create({
+    const response = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 16000,
       betas: [FALLBACK_BETA],
@@ -93,6 +127,7 @@ export async function research(options: {
       ],
     });
 
+    await recordUsage(options.feature, MODEL, response.usage);
     for (const block of response.content) {
       if (block.type === "text") {
         text += block.text;
@@ -117,6 +152,7 @@ export async function research(options: {
 }
 
 export function friendlyAiError(error: unknown): string {
+  if (error instanceof AiBudgetError) return error.message;
   if (error instanceof AiUnavailableError) return "AI isn't set up yet. Add ANTHROPIC_API_KEY to turn it on.";
   if (error instanceof AiFailedError) return error.message;
   if (error instanceof Anthropic.RateLimitError) return "Claude is busy right now. Try again in a minute.";

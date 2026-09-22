@@ -34,6 +34,8 @@ export async function suggestDinnerIdeas(
   count = 8,
 ): Promise<DinnerIdea[]> {
   const result = await structured({
+    feature: "discover ideas",
+    tier: "fast",
     system: `You suggest new family dinners for a family to swipe through (like a dating app, for recipes). Every idea must be a real, recognizable dish that a busy, not-very-confident cook can make on a weeknight with normal grocery store ingredients, and that kids are likely to eat.
 
 Mix it up across the batch:
@@ -59,6 +61,7 @@ export async function writeIdeaRecipe(idea: { title: string; description: string
   const result = await generateRecipe(
     `${idea.title}: ${idea.description}${idea.twistOn ? ` (a twist on the family's ${idea.twistOn})` : ""}. This is a main dish.`,
     brief,
+    { tier: "fast", feature: "discover recipe" },
   );
   if (!result.found || !result.recipe) return null;
   return normalizeAiRecipe({ ...result.recipe, kind: "main" }, brief.sides.map((s) => s.slug));

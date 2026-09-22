@@ -125,6 +125,8 @@ export const familySettings = pgTable(
     autopilotEnabled: boolean("autopilot_enabled").notNull().default(true),
     autopilotDay: integer("autopilot_day").notNull().default(5),
     reminders: jsonb("reminders").$type<ReminderPrefs>().notNull().default(DEFAULT_REMINDERS),
+    /** Most the app may spend on AI per week, in cents; 0 turns AI off */
+    aiWeeklyBudgetCents: integer("ai_weekly_budget_cents").notNull().default(1000),
     setupCompletedAt: timestamp("setup_completed_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -697,4 +699,22 @@ export const recipeIdea = pgTable(
     ...timestamps,
   },
   (t) => [index("recipe_idea_status_idx").on(t.status, t.createdAt)],
+);
+
+/** Every AI call and what it cost, for the weekly budget. */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    feature: text("feature").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    webSearches: integer("web_searches").notNull().default(0),
+    /** Estimated cost in cents (fractional) */
+    costCents: doublePrecision("cost_cents").notNull(),
+    background: boolean("background").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [index("ai_usage_created_idx").on(t.createdAt)],
 );

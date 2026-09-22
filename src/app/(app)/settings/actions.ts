@@ -54,3 +54,11 @@ export async function updateReminderSettings(
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+export async function updateAiBudget(dollars: number): Promise<{ error: string } | { ok: true }> {
+  await requireParentMember();
+  if (!Number.isFinite(dollars) || dollars < 0 || dollars > 200) return { error: "Pick a budget between $0 and $200 a week." };
+  await db.update(familySettings).set({ aiWeeklyBudgetCents: Math.round(dollars * 100) }).where(eq(familySettings.id, 1));
+  revalidatePath("/settings");
+  return { ok: true };
+}
