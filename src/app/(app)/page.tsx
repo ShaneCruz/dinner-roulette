@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { Avatar, ButtonLink, Card } from "@/components/ui";
 import { db } from "@/db";
-import { recipe } from "@/db/schema";
+import { recipe, restaurant } from "@/db/schema";
 import { loadMeals, recipeTitles } from "@/lib/plan/store";
 import { NIGHT_TYPES } from "@/lib/plan/week";
 import { greetingKey, say } from "@/lib/copy";
@@ -41,6 +41,9 @@ export default async function HomePage() {
   );
   const [tonightFull] = tonight?.recipeId ? await db.select().from(recipe).where(eq(recipe.id, tonight.recipeId)) : [];
   const tonightRecipe = tonight?.nightType === "cook" && tonightFull ? tonightFull : null;
+  const tonightRestaurant = tonight?.restaurantId
+    ? ((await db.select().from(restaurant).where(eq(restaurant.id, tonight.restaurantId)).limit(1))[0] ?? null)
+    : null;
   const tonightSides = (tonight?.sideRecipeIds ?? []).map((id) => titles.get(id)?.title).filter(Boolean);
   const tomorrowLabel = !tomorrowMeal
     ? null
@@ -158,9 +161,22 @@ export default async function HomePage() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-tomato-strong">Tonight</p>
             {tonight && tonight.nightType !== "cook" ? (
-              <h2 className="mt-1 text-3xl font-bold">
-                {NIGHT_TYPES[tonight.nightType].emoji} {NIGHT_TYPES[tonight.nightType].label}
-              </h2>
+              <>
+                <h2 className="mt-1 text-3xl font-bold">
+                  {NIGHT_TYPES[tonight.nightType].emoji} {NIGHT_TYPES[tonight.nightType].label}
+                </h2>
+                {tonight.nightType === "takeout" ? (
+                  tonightRestaurant ? (
+                    <Link href={`/takeout/${tonightRestaurant.id}`} className="mt-1 block text-lg font-semibold text-tomato">
+                      from {tonightRestaurant.name}: see everyone&apos;s picks →
+                    </Link>
+                  ) : (
+                    <Link href={`/takeout/spin?date=${today}`} className="mt-2 inline-block rounded-full bg-surface px-4 py-2 font-semibold text-tomato-strong">
+                      🎡 Spin for a place
+                    </Link>
+                  )
+                ) : null}
+              </>
             ) : tonightRecipe ? (
               <>
                 <h2 className="mt-1 text-3xl font-bold">{tonightRecipe.title}</h2>
@@ -180,7 +196,13 @@ export default async function HomePage() {
             ) : (
               <>
                 <h2 className="mt-1 text-2xl font-bold">No plan yet</h2>
-                <p className="mt-1 text-muted">Pick something for tonight, or plan the whole week in one go.</p>
+                <p className="mt-1 text-muted">
+                  Pick something for tonight, plan the whole week in one go, or{" "}
+                  <Link href={`/takeout/spin?date=${today}`} className="font-semibold text-tomato underline">
+                    spin for takeout
+                  </Link>
+                  .
+                </p>
               </>
             )}
             {tonight?.status === "skipped" ? <p className="mt-1 text-sm text-muted">(Skipped)</p> : null}

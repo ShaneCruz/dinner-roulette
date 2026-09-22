@@ -60,6 +60,7 @@ export async function updateNight(date: string, patch: NightPatch): Promise<{ er
     values.recipeId = null;
     values.sideRecipeIds = [];
   }
+  if (values.nightType && values.nightType !== "takeout") values.restaurantId = null;
   const planId = await saveNight(db, date, settings.weekStartsOn, values);
   await afterChange([planId]);
 }

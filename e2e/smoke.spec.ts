@@ -61,6 +61,8 @@ test("every page opens without crashing", async ({ page }) => {
     "/recipes?kind=side",
     "/recipes/new",
     "/recipes/import",
+    "/takeout",
+    "/takeout/spin",
     "/family",
     "/family/new",
     "/settings",
@@ -77,6 +79,11 @@ test("every page opens without crashing", async ({ page }) => {
   await page.goto("/family");
   const firstMember = await page.locator('a[href^="/family/"]:not([href="/family/new"])').first().getAttribute("href");
   if (firstMember) await expectHealthy(page, firstMember);
+
+  // A restaurant, if any
+  await page.goto("/takeout");
+  const restaurantLinks = page.locator('a[href^="/takeout/"]:not([href="/takeout/spin"])');
+  if (await restaurantLinks.count()) await expectHealthy(page, (await restaurantLinks.first().getAttribute("href"))!);
 
   // A cooked dinner's rating page, if there is one
   await page.goto("/history");

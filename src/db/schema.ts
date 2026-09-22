@@ -331,10 +331,12 @@ export const plannedMeal = pgTable(
     status: mealStatus("status").notNull().default("planned"),
     notes: text("notes"),
     cookedAt: timestamp("cooked_at", { withTimezone: true }),
-    /** Whose turn this night was (their tastes counted double) */
+    /** Whose turn this night was (their tastes counted triple) */
     favoredMemberId: uuid("favored_member_id").references(() => member.id, { onDelete: "set null" }),
     /** Short "why this dinner" note when the planner suggested it */
     suggestionReason: text("suggestion_reason"),
+    /** Where takeout came from, on takeout nights */
+    restaurantId: uuid("restaurant_id").references(() => restaurant.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [
@@ -443,3 +445,50 @@ export const rating = pgTable(
     check("rating_stars_range", sql`${t.stars} between 1 and 5`),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Takeout
+// ---------------------------------------------------------------------------
+
+export type RestaurantDish = {
+  name: string;
+  description: string | null;
+  price: string | null;
+  tags: string[];
+};
+
+export type RestaurantPick = {
+  /** Member id the pick is for (mapped back from an anonymous label) */
+  memberId: string;
+  dish: string;
+  why: string;
+};
+
+export type RestaurantResearch = {
+  summary: string;
+  menuUrl: string | null;
+  priceRange: string | null;
+  orderingTips: string | null;
+  dishes: RestaurantDish[];
+  picks: RestaurantPick[];
+  familyOrder: string | null;
+  sources: { title: string; url: string }[];
+  /** "Person A" → member id, to show names in place of the anonymous labels */
+  labels?: Record<string, string>;
+};
+
+export const restaurant = pgTable("restaurant", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  cuisine: text("cuisine").notNull(),
+  /** Town or neighborhood, to find the right location */
+  area: text("area"),
+  website: text("website"),
+  phone: text("phone"),
+  notes: text("notes"),
+  research: jsonb("research").$type<RestaurantResearch>(),
+  researchedAt: timestamp("researched_at", { withTimezone: true }),
+  researchError: text("research_error"),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  ...timestamps,
+});

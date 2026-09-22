@@ -33,6 +33,9 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
             <ButtonLink href={`/plan/print?week=${weekStart}`} variant="secondary" size="sm">
               🖨️ Print
             </ButtonLink>
+            <ButtonLink href="/takeout" variant="ghost" size="sm">
+              🛵 Takeout
+            </ButtonLink>
             <ButtonLink href="/history" variant="ghost" size="sm">
               History
             </ButtonLink>
@@ -66,6 +69,7 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
         options={view.options}
         bumped={view.bumped}
         rankings={view.rankings}
+        restaurants={view.restaurants}
         weekStart={weekStart}
         today={today}
         canEdit={acting.role === "parent"}

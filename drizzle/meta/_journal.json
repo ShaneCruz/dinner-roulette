@@ -29,6 +29,13 @@
       "when": 1790043788129,
       "tag": "0003_home_location",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790046308317,
+      "tag": "0004_restaurants",
+      "breakpoints": true
     }
   ]
 }
