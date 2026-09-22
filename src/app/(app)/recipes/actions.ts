@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { recipeInputSchema, type RecipeInput } from "@/lib/recipes/schema";
-import { getRecipe, saveRecipe, setRecipeArchived, slugify, uniqueSlug } from "@/lib/recipes/store";
+import { deleteRecipe, getRecipe, saveRecipe, setRecipeArchived, slugify, uniqueSlug } from "@/lib/recipes/store";
 import { requireParentMember } from "@/lib/session";
 
 export async function saveRecipeAction(
@@ -47,4 +47,20 @@ export async function archiveRecipe(id: string, archived: boolean) {
   revalidatePath("/recipes");
   const recipe = await getRecipe(db, { id });
   redirect(archived ? "/recipes" : `/recipes/${recipe?.slug ?? ""}`);
+}
+
+/** Retires an older recipe in place (used when an import replaces it). */
+export async function retireRecipe(id: string) {
+  await requireParentMember();
+  await setRecipeArchived(db, id, true);
+  revalidatePath("/recipes");
+}
+
+/** Throws away an import that hasn't been saved yet. */
+export async function discardDraft(id: string) {
+  await requireParentMember();
+  const recipe = await getRecipe(db, { id });
+  if (recipe?.status === "draft") await deleteRecipe(db, id);
+  revalidatePath("/recipes");
+  redirect("/recipes");
 }

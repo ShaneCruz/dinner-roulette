@@ -29,7 +29,14 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
         title="Recipe box"
         subtitle={`${recipes.length} ${recipes.length === 1 ? "recipe" : "recipes"}`}
         actions={
-          acting.role === "parent" ? <ButtonLink href="/recipes/new">+ New recipe</ButtonLink> : null
+          acting.role === "parent" ? (
+            <>
+              <ButtonLink href="/recipes/import">📷 Add a recipe</ButtonLink>
+              <ButtonLink href="/recipes/import?mode=surprise" variant="secondary">
+                🎲 Surprise us
+              </ButtonLink>
+            </>
+          ) : null
         }
       />
 

@@ -52,6 +52,15 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
           Next week →
         </Link>
       </nav>
+      {acting.role === "parent" && isCurrent ? (
+        <p className="mb-4 text-sm text-muted">
+          🎲 Want to try something new this week?{" "}
+          <Link href="/recipes/import?mode=surprise" className="font-semibold text-tomato underline">
+            Get a new dinner idea
+          </Link>{" "}
+          based on what your family already likes.
+        </p>
+      ) : null}
       <PlanBoard
         nights={view.nights}
         options={view.options}

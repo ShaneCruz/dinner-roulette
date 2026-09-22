@@ -100,6 +100,17 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         </div>
       </header>
 
+      {recipe.status === "draft" ? (
+        <p className="mb-4 rounded-2xl bg-mustard-soft px-4 py-3 text-sm">
+          ✨ This recipe is new and hasn&apos;t been checked yet, so it won&apos;t be suggested for dinners.{" "}
+          {isParent ? (
+            <Link href={`/recipes/${recipe.slug}/edit`} className="font-semibold underline">
+              Check it over and save
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+
       {conflicts.length > 0 ? (
         <ul className="mb-4 space-y-1 rounded-2xl bg-mustard-soft px-4 py-3 text-sm">
           {conflicts.map((c) => (
