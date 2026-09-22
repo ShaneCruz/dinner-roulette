@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: { default: "Dinner Roulette", template: "%s · Dinner Roulette" },
   description: "Family dinners, decided. Plans the week, builds the grocery list, and spins the wheel.",
   applicationName: "Dinner Roulette",
-  appleWebApp: { capable: true, title: "Dinner Roulette", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Cruz Meals", statusBarStyle: "default" },
   // Plain files at the standard addresses: iPhones (especially adding from
   // Chrome) show a letter tile when the icon link carries a query string.
   icons: {

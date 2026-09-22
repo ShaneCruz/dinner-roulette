@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Dinner Roulette",
-    short_name: "Dinner",
+    name: "Cruz Meals",
+    short_name: "Cruz Meals",
     description: "Family dinners, decided.",
     start_url: "/",
     display: "standalone",
