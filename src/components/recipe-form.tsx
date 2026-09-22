@@ -478,7 +478,9 @@ function IngredientRows({
         <div
           key={index}
           className={cx(
-            "grid grid-cols-[5rem_7rem_1fr_auto] gap-2 rounded-2xl sm:grid-cols-[5rem_7rem_1fr_1fr_9rem_auto]",
+            // On a phone: amount, unit and remove on one line, then the name,
+            // note and section full width so nothing is cut off.
+            "grid grid-cols-[5rem_1fr_auto] gap-2 rounded-2xl sm:grid-cols-[5rem_7rem_1fr_1fr_9rem_auto]",
             !compact && "border border-border p-2 sm:border-0 sm:p-0",
           )}
         >
@@ -509,7 +511,7 @@ function IngredientRows({
             ))}
           </select>
           <input
-            className={inputClass}
+            className={cx(inputClass, "col-span-3 sm:col-span-1")}
             aria-label="Ingredient"
             placeholder="yellow onion"
             value={row.name}
@@ -526,7 +528,7 @@ function IngredientRows({
             }}
           />
           <select
-            className={cx(inputClass, "col-span-2 px-2 sm:col-span-1")}
+            className={cx(inputClass, "col-span-3 px-2 sm:col-span-1")}
             aria-label="Store section"
             value={row.section}
             onChange={(e) => onChange(replaceAt(rows, index, { ...row, section: e.target.value as IngredientInput["section"] }))}
@@ -537,9 +539,12 @@ function IngredientRows({
               </option>
             ))}
           </select>
-          <RemoveButton onClick={() => onChange(rows.filter((_, i) => i !== index))} />
+          <RemoveButton
+            className="col-start-3 row-start-1 sm:col-start-auto sm:row-start-auto"
+            onClick={() => onChange(rows.filter((_, i) => i !== index))}
+          />
           {!compact ? (
-            <div className="col-span-4 flex gap-4 text-sm text-muted sm:col-span-6">
+            <div className="col-span-3 flex flex-wrap gap-4 text-sm text-muted sm:col-span-6">
               <label className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
@@ -598,12 +603,12 @@ function NumberField({
   );
 }
 
-function RemoveButton({ onClick }: { onClick: () => void }) {
+function RemoveButton({ onClick, className }: { onClick: () => void; className?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="h-11 w-9 shrink-0 rounded-full text-xl text-muted hover:bg-tomato-soft hover:text-tomato"
+      className={cx("h-11 w-9 shrink-0 rounded-full text-xl text-muted hover:bg-tomato-soft hover:text-tomato", className)}
       aria-label="Remove"
     >
       ×
