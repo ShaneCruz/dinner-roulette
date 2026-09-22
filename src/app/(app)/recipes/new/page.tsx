@@ -1,4 +1,5 @@
-import { RecipeForm, blankRecipe } from "@/components/recipe-form";
+import { RecipeForm } from "@/components/recipe-form";
+import { blankRecipe } from "@/lib/recipes/blank";
 import { PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { listRecipes } from "@/lib/recipes/store";
