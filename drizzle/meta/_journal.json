@@ -36,6 +36,20 @@
       "when": 1790046308317,
       "tag": "0004_restaurants",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790047298080,
+      "tag": "0005_sunday_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790048249486,
+      "tag": "0006_restaurant_favorites",
+      "breakpoints": true
     }
   ]
 }

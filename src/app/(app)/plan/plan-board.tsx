@@ -1,5 +1,7 @@
 "use client";
 
+import { isLockedPick } from "@/lib/fun/card-info";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Avatar, Badge, Button, Card, cx } from "@/components/ui";
@@ -232,6 +234,13 @@ function NightCard({
   const eating = new Set(night.eatingIds);
   const favored = members.find((m) => m.id === night.favoredMemberId) ?? null;
   const todayRef = useRef<HTMLDivElement>(null);
+  // Anyone can spin for an open night or one the planner picked; hand-picked dinners are the parents' call.
+  const spinnable =
+    cooking &&
+    !isPast &&
+    night.status !== "cooked" &&
+    night.status !== "skipped" &&
+    (!recipe || (Boolean(night.suggestionReason) && !isLockedPick(night.suggestionReason)));
 
   useEffect(() => {
     if (isToday) todayRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -387,7 +396,14 @@ function NightCard({
                 >
                   ↻ Another idea
                 </button>
+                <Link href={`/plan/spin?date=${night.date}`} className="text-sm font-semibold text-foreground">
+                  🎡 Spin
+                </Link>
               </div>
+            ) : !canEdit && spinnable ? (
+              <Link href={`/plan/spin?date=${night.date}`} className="mt-2 inline-block text-sm font-semibold text-tomato">
+                🎡 Spin the wheel instead
+              </Link>
             ) : null}
             {night.status === "cooked" && night.mealId ? (
               <Link href={`/rate/${night.mealId}`} className="mt-2 inline-block text-sm font-semibold text-tomato">
@@ -395,7 +411,10 @@ function NightCard({
               </Link>
             ) : null}
           </div>
-        ) : canEdit ? (
+        ) : canEdit || spinnable ? (
+          <div className="space-y-2">
+            {night.suggestionReason ? <p className="text-sm font-semibold">{night.suggestionReason}</p> : null}
+            {canEdit ? (
           <button
             type="button"
             onClick={onPick}
@@ -406,6 +425,16 @@ function NightCard({
             </span>
             <span className="mt-1 font-semibold">Pick dinner</span>
           </button>
+            ) : null}
+            {spinnable ? (
+              <Link
+                href={`/plan/spin?date=${night.date}`}
+                className="block rounded-2xl bg-mustard-soft py-2.5 text-center font-semibold text-foreground"
+              >
+                🎡 Can&apos;t decide? Spin the wheel
+              </Link>
+            ) : null}
+          </div>
         ) : (
           <p className="py-4 text-center text-muted">Nothing planned yet</p>
         )}

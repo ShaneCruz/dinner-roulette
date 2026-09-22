@@ -477,6 +477,15 @@ export type RestaurantResearch = {
   labels?: Record<string, string>;
 };
 
+/** How someone feels about a restaurant overall. */
+export type RestaurantFeeling = "love" | "fine" | "meh";
+
+/** The family's usual order: each person's go-to dishes, plus things for the table. */
+export type RestaurantFavorites = {
+  people: Record<string, { dishes: string[]; feeling: RestaurantFeeling | null }>;
+  shared: string[];
+};
+
 export const restaurant = pgTable("restaurant", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -487,8 +496,74 @@ export const restaurant = pgTable("restaurant", {
   phone: text("phone"),
   notes: text("notes"),
   research: jsonb("research").$type<RestaurantResearch>(),
+  favorites: jsonb("favorites").$type<RestaurantFavorites>(),
   researchedAt: timestamp("researched_at", { withTimezone: true }),
   researchError: text("research_error"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// Sunday session, cards, and the wheel
+// ---------------------------------------------------------------------------
+
+/** A swipe in the Sunday session: -1 nope, 1 yes, 2 love (4 when doubled). */
+export const sessionVote = pgTable(
+  "session_vote",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    weekStart: date("week_start").notNull(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    vote: integer("vote").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("session_vote_idx").on(t.weekStart, t.memberId, t.recipeId)],
+);
+
+export const cardType = pgEnum("card_type", ["veto", "double_down", "respin", "chefs_pick"]);
+
+/**
+ * Power-up cards a parent handed out (or the app awarded). Vetoes don't
+ * need grants: every kid gets one per week, tracked in cardUse.
+ */
+export const cardGrant = pgTable("card_grant", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  memberId: uuid("member_id")
+    .notNull()
+    .references(() => member.id, { onDelete: "cascade" }),
+  card: cardType("card").notNull(),
+  reason: text("reason"),
+  grantedByMemberId: uuid("granted_by_member_id").references(() => member.id, { onDelete: "set null" }),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+export const cardUse = pgTable(
+  "card_use",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    card: cardType("card").notNull(),
+    weekStart: date("week_start").notNull(),
+    recipeId: uuid("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("card_use_week_idx").on(t.weekStart, t.memberId)],
+);
+
+export const wheelSpin = pgTable("wheel_spin", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  date: date("date").notNull(),
+  spunByMemberId: uuid("spun_by_member_id").references(() => member.id, { onDelete: "set null" }),
+  recipeId: uuid("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+  /** Set when the chaos slice came up */
+  chaos: text("chaos"),
   ...timestamps,
 });

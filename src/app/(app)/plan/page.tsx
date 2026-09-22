@@ -33,6 +33,9 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
             <ButtonLink href={`/plan/print?week=${weekStart}`} variant="secondary" size="sm">
               🖨️ Print
             </ButtonLink>
+            <ButtonLink href="/session" variant="secondary" size="sm">
+              🎉 Sunday session
+            </ButtonLink>
             <ButtonLink href="/takeout" variant="ghost" size="sm">
               🛵 Takeout
             </ButtonLink>

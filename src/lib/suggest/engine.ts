@@ -49,6 +49,8 @@ export type EngineMember = {
   ratings: Record<string, number>;
   /** Usually away (boarding school); gets First Pick on their first night home */
   usuallyAway?: boolean;
+  /** This week's swipe-round votes: -1 nope, 1 yes, 2 love, 4 doubled love */
+  votes?: Record<string, number>;
 };
 
 export type Weather = { tempMaxF: number; precipChance: number };
@@ -73,7 +75,18 @@ export type EngineContext = {
   members: EngineMember[];
   recipes: EngineRecipe[];
   settings: EngineSettings;
+  /** Veto cards played this week: these dinners are off the table */
+  vetoes?: { recipeId: string; memberId: string }[];
 };
+
+/** How much a swipe-round vote moves someone's like for a dinner. */
+export function voteBoost(vote: number | undefined): number {
+  if (vote === undefined) return 0;
+  if (vote < 0) return -1.5;
+  if (vote >= 4) return 2.5;
+  if (vote >= 2) return 1.5;
+  return 0.7;
+}
 
 /** Dinners already on the plan this week (fixed or chosen earlier in the fill). */
 export type Chosen = { date: string; recipeId: string };
@@ -157,6 +170,12 @@ export function scoreRecipe(
   const others = chosen.filter((c) => c.date !== night.date);
   if (others.some((c) => c.recipeId === recipe.id)) return exclude("Already on the plan this week");
 
+  const veto = context.vetoes?.find((v) => v.recipeId === recipe.id);
+  if (veto) {
+    const who = context.members.find((m) => m.id === veto.memberId)?.name ?? "Someone";
+    return exclude(`Vetoed by ${who} this week`);
+  }
+
   if (!fitsBudget(recipe, night.budget, context.settings.weeknightActiveMinutes)) {
     return exclude("Needs more time than tonight has");
   }
@@ -217,10 +236,14 @@ export function scoreRecipe(
       const favored = eater.id === night.favoredMemberId;
       const weight = favored ? 3 : 1;
       const like = likeFor(eater, recipe, recipesById);
-      total += like.value * weight;
+      const vote = eater.votes?.[recipe.id];
+      const value = Math.max(-2.5, Math.min(3, like.value + voteBoost(vote)));
+      total += value * weight;
       weights += weight;
-      if (favored && like.value >= 1) reasons.push({ text: `${eater.name}'s pick: loves it`, weight: 3 });
-      else if (favored && like.value > 0.2) reasons.push({ text: `${eater.name} likes this kind of dinner`, weight: 2 });
+      if (vote !== undefined && vote >= 4) reasons.push({ text: `${eater.name} doubled down on it`, weight: 3.5 });
+      else if (vote === 2) reasons.push({ text: `${eater.name} loved it in the swipe round`, weight: favored ? 3.2 : 2.6 });
+      else if (favored && like.value >= 1) reasons.push({ text: `${eater.name}'s pick: loves it`, weight: 3 });
+      else if (favored && value > 0.2) reasons.push({ text: `${eater.name} likes this kind of dinner`, weight: 2 });
       if (like.value <= -1.5) reasons.push({ text: `${eater.name} wasn't a fan last time`, weight: -1 });
     }
     score += (total / weights) * 2;

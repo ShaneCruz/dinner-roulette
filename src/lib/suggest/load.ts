@@ -4,6 +4,9 @@ import { familySettings, member, memberFoodRule, plannedMeal, recipe, recipeIngr
 import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { addDays } from "@/lib/presence";
 import { averageRatings } from "@/lib/ratings/store";
+import { isLockedPick } from "@/lib/fun/card-info";
+import { weekVetoes } from "@/lib/fun/cards";
+import { votesByMember, weekVotes } from "@/lib/fun/votes";
 import { forecast, locateZip } from "@/lib/weather";
 import { defaultTimeBudget, weekDates, type TimeBudget } from "@/lib/plan/week";
 import type { Chosen, EngineContext, EngineMember, EngineNight, EngineRecipe, TurnHistory, Weather } from "./engine";
@@ -11,7 +14,7 @@ import type { Chosen, EngineContext, EngineMember, EngineNight, EngineRecipe, Tu
 /** Everything the engine needs to plan the week starting `weekStart`. */
 export async function loadEngineInputs(db: Database, weekStart: string, options: { weather?: boolean } = {}) {
   const dates = weekDates(weekStart);
-  const [[settings], recipeRows, ingredientRows, variantRows, lastCookedRows, loves, ratings, eaterContext, meals, turnRows] =
+  const [[settings], recipeRows, ingredientRows, variantRows, lastCookedRows, loves, ratings, eaterContext, meals, turnRows, voteRows, vetoes] =
     await Promise.all([
       db.select().from(familySettings).limit(1),
       db.select().from(recipe).where(and(isNull(recipe.archivedAt), eq(recipe.status, "approved"))),
@@ -34,7 +37,10 @@ export async function loadEngineInputs(db: Database, weekStart: string, options:
         .from(plannedMeal)
         .where(and(isNotNull(plannedMeal.favoredMemberId), gte(plannedMeal.date, addDays(dates[0], -21)), lt(plannedMeal.date, dates[0])))
         .orderBy(asc(plannedMeal.date)),
+      weekVotes(db, dates[0]),
+      weekVetoes(db, dates[0]),
     ]);
+  const votes = votesByMember(voteRows);
 
   const lastCooked = new Map(lastCookedRows.map((r) => [r.recipeId, r.last]));
   const recipes: EngineRecipe[] = recipeRows.map((r) => ({
@@ -71,6 +77,7 @@ export async function loadEngineInputs(db: Database, weekStart: string, options:
     lovedRecipeIds: loves.filter((l) => l.memberId === m.id).map((l) => l.recipeId!),
     ratings: ratings.get(m.id) ?? {},
     usuallyAway: m.defaultPresence === "away",
+    votes: votes.get(m.id) ?? {},
   }));
 
   // A usually-away kid's first night home this week earns First Pick.
@@ -105,9 +112,10 @@ export async function loadEngineInputs(db: Database, weekStart: string, options:
       healthyNightsTarget: settings?.healthyNightsTarget ?? 5,
       grillCaps: settings?.grillCaps ?? { summer: 3, shoulder: 2, winter: 1 },
     },
+    vetoes,
   };
 
-  const nights: (EngineNight & { status: string; nightType: string; recipeId: string | null })[] = dates.map((date) => {
+  const nights: (EngineNight & { status: string; nightType: string; recipeId: string | null; suggested: boolean })[] = dates.map((date) => {
     const meal = meals.get(date);
     return {
       date,
@@ -118,6 +126,7 @@ export async function loadEngineInputs(db: Database, weekStart: string, options:
       status: meal?.status ?? "empty",
       nightType: meal?.nightType ?? "cook",
       recipeId: meal?.recipeId ?? null,
+      suggested: Boolean(meal?.suggestionReason) && !isLockedPick(meal?.suggestionReason),
     };
   });
 

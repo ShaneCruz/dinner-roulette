@@ -6,7 +6,10 @@ import { aiEnabled } from "@/lib/ai/claude";
 import { withNames } from "@/lib/restaurants/names";
 import { getRestaurant } from "@/lib/restaurants/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
+import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
+import { todayIn } from "@/lib/presence";
 import { RestaurantTools } from "./restaurant-tools";
+import { UsualOrder } from "./usual-order";
 
 export async function generateMetadata({ params }: PageProps<"/takeout/[id]">) {
   const { id } = await params;
@@ -26,7 +29,7 @@ const TAG_LABELS: Record<string, string> = {
 };
 
 export default async function RestaurantPage({ params, searchParams }: PageProps<"/takeout/[id]">) {
-  const { acting } = await requireActingMember();
+  const { acting, settings } = await requireActingMember();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [place, members] = await Promise.all([getRestaurant(db, id), getActiveMembers()]);
@@ -35,6 +38,9 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
   const isParent = acting.role === "parent";
   const startResearch = (await searchParams).research === "1" && !research;
   const names = new Map(members.map((m) => [m.id, m.name]));
+  const today = todayIn(settings.timezone);
+  const [eaterContext, meals] = await Promise.all([loadEaterContext(db, today, today), loadMeals(db, today, today)]);
+  const eatingTonight = eatersFor(eaterContext, today, meals.get(today)?.eaterIds).map((m) => m.id);
   const named = (text: string | null) => withNames(text, research?.labels, names);
 
   return (
@@ -65,6 +71,30 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
           }}
         />
       ) : null}
+
+      <UsualOrder
+        restaurantId={place.id}
+        restaurantName={place.name}
+        phone={place.phone}
+        people={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          emoji: m.avatarEmoji,
+          color: m.avatarColor,
+          role: m.role,
+          traits: {
+            isKid: m.role === "kid",
+            spiceTolerance: m.spiceTolerance,
+            prefersHighProtein: m.prefersHighProtein,
+            wantsHealthy: m.wantsHealthySwaps,
+          },
+        }))}
+        favorites={place.favorites}
+        research={research ? { dishes: research.dishes, picks: research.picks } : null}
+        actingId={acting.id}
+        isParent={isParent}
+        eatingIds={eatingTonight}
+      />
 
       {research ? (
         <>
@@ -124,7 +154,7 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
                 <li key={dish.name} className="py-2.5">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="font-semibold">{dish.name}</span>
-                    {dish.price ? <span className="shrink-0 text-sm text-muted">{dish.price}</span> : null}
+                    {dish.price ? <span className="max-w-[45%] text-right text-sm text-muted">{dish.price}</span> : null}
                   </div>
                   {dish.description ? <p className="text-sm text-muted">{dish.description}</p> : null}
                   {dish.tags.length ? (

@@ -93,7 +93,7 @@ export function Wheel({
 
   return (
     <div className="flex flex-col items-center gap-5">
-      <div className="relative" style={{ width: radius * 2 + 20, height: radius * 2 + 20 }}>
+      <div className="relative aspect-square w-full" style={{ maxWidth: radius * 2 + 20 }}>
         <div
           className="absolute left-1/2 top-0 z-10 -translate-x-1/2 text-4xl drop-shadow"
           aria-hidden
@@ -133,7 +133,7 @@ export function Wheel({
                     textAnchor="middle"
                     dominantBaseline="middle"
                     fill="#fff"
-                    fontSize={n > 8 ? 11 : 13}
+                    fontSize={n > 8 || label.length > 13 ? 11 : 13}
                     fontWeight={700}
                     style={{ fontFamily: "var(--font-nunito)" }}
                     transform="rotate(-90)"
