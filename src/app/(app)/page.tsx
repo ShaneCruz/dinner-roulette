@@ -1,7 +1,13 @@
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { Avatar, ButtonLink, Card } from "@/components/ui";
+import { db } from "@/db";
+import { recipe } from "@/db/schema";
+import { loadMeals, recipeTitles } from "@/lib/plan/store";
+import { NIGHT_TYPES } from "@/lib/plan/week";
 import { greetingKey, say } from "@/lib/copy";
 import {
+  addDays,
   formatDateRange,
   hourIn,
   presenceOn,
@@ -12,6 +18,7 @@ import {
 } from "@/lib/presence";
 import { loadPresenceRanges } from "@/lib/presence-data";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
+import { MadeItButton } from "./tonight-actions";
 
 export default async function HomePage() {
   const { settings, acting } = await requireActingMember();
@@ -21,8 +28,30 @@ export default async function HomePage() {
   const tone = acting.humorDial;
   const greeting = say(greetingKey(hourIn(settings.timezone)), tone, { name: acting.name }, today.charCodeAt(9));
 
-  const homeTonight = members.filter((m) => presenceOn(m, ranges, today).presence === "home");
-  const awayTonight = members.filter((m) => presenceOn(m, ranges, today).presence === "away");
+  const tomorrow = addDays(today, 1);
+  const meals = await loadMeals(db, today, tomorrow);
+  const tonight = meals.get(today) ?? null;
+  const tomorrowMeal = meals.get(tomorrow) ?? null;
+  const titles = await recipeTitles(
+    db,
+    [tonight, tomorrowMeal].flatMap((m) => (m?.recipeId ? [m.recipeId, ...m.sideRecipeIds] : [])),
+  );
+  const [tonightFull] = tonight?.recipeId ? await db.select().from(recipe).where(eq(recipe.id, tonight.recipeId)) : [];
+  const tonightRecipe = tonight?.nightType === "cook" && tonightFull ? tonightFull : null;
+  const tonightSides = (tonight?.sideRecipeIds ?? []).map((id) => titles.get(id)?.title).filter(Boolean);
+  const tomorrowLabel = !tomorrowMeal
+    ? null
+    : tomorrowMeal.nightType !== "cook"
+      ? NIGHT_TYPES[tomorrowMeal.nightType].label
+      : tomorrowMeal.recipeId
+        ? titles.get(tomorrowMeal.recipeId)?.title ?? null
+        : null;
+
+  const homeIds = new Set(
+    tonight?.eaterIds ?? members.filter((m) => presenceOn(m, ranges, today).presence === "home").map((m) => m.id),
+  );
+  const eatingTonight = members.filter((m) => homeIds.has(m.id));
+  const notEatingTonight = members.filter((m) => !homeIds.has(m.id));
   const homecomings = upcomingHomecomings(members, ranges, today);
   const toConfirm = acting.role === "parent" ? rangesNeedingConfirmation(ranges, today) : [];
   const exceptions = upcomingExceptions(members, ranges, today);
@@ -95,32 +124,66 @@ export default async function HomePage() {
       <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
         <Card className="flex flex-col justify-between gap-4 bg-gradient-to-br from-tomato-soft to-surface p-6">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-tomato-strong">
-              Tonight
-            </p>
-            <h2 className="mt-1 text-2xl font-bold">No plan yet</h2>
-            <p className="mt-1 text-muted">
-              Weekly planning is coming next. For now, pick something from the recipe box.
-            </p>
+            <p className="text-sm font-semibold uppercase tracking-widest text-tomato-strong">Tonight</p>
+            {tonight && tonight.nightType !== "cook" ? (
+              <h2 className="mt-1 text-3xl font-bold">
+                {NIGHT_TYPES[tonight.nightType].emoji} {NIGHT_TYPES[tonight.nightType].label}
+              </h2>
+            ) : tonightRecipe ? (
+              <>
+                <h2 className="mt-1 text-3xl font-bold">{tonightRecipe.title}</h2>
+                {tonightSides.length > 0 ? (
+                  <p className="text-muted">with {tonightSides.join(" + ")}</p>
+                ) : null}
+                <p className="mt-2 text-sm text-muted">
+                  {tonight?.status === "cooked"
+                    ? "✓ Made it. Nice work, chef."
+                    : `${tonightRecipe.activeMinutes} min hands-on${
+                        tonightRecipe.totalMinutes - tonightRecipe.activeMinutes >= 60
+                          ? ` · needs about ${Math.round(tonightRecipe.totalMinutes / 60)} hours total, so start early`
+                          : ""
+                      }`}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="mt-1 text-2xl font-bold">No plan yet</h2>
+                <p className="mt-1 text-muted">Pick something for tonight, or plan the whole week in one go.</p>
+              </>
+            )}
+            {tonight?.status === "skipped" ? <p className="mt-1 text-sm text-muted">(Skipped)</p> : null}
           </div>
-          <div>
-            <ButtonLink href="/recipes">Browse recipes</ButtonLink>
+          <div className="flex flex-wrap gap-2">
+            {tonightRecipe ? (
+              <ButtonLink href={`/recipes/${tonightRecipe.slug}`}>Let&apos;s cook</ButtonLink>
+            ) : (
+              <ButtonLink href="/plan">Plan the week</ButtonLink>
+            )}
+            {tonightRecipe && tonight?.status === "planned" && acting.role === "parent" ? (
+              <MadeItButton date={today} />
+            ) : null}
+            {tonightRecipe ? (
+              <ButtonLink href="/plan" variant="ghost">
+                Change it
+              </ButtonLink>
+            ) : null}
           </div>
+          {tomorrowLabel ? <p className="text-sm text-muted">Tomorrow: {tomorrowLabel}</p> : null}
         </Card>
 
         <Card>
-          <h2 className="text-lg font-bold">Home for dinner</h2>
+          <h2 className="text-lg font-bold">Eating tonight</h2>
           <ul className="mt-3 space-y-2">
-            {homeTonight.map((m) => (
+            {eatingTonight.map((m) => (
               <li key={m.id} className="flex items-center gap-3">
                 <Avatar emoji={m.avatarEmoji} color={m.avatarColor} size="sm" />
                 <span className="font-semibold">{m.name}</span>
               </li>
             ))}
           </ul>
-          {awayTonight.length > 0 ? (
+          {notEatingTonight.length > 0 ? (
             <p className="mt-3 text-sm text-muted">
-              Away: {awayTonight.map((m) => m.name).join(", ")}
+              Not eating: {notEatingTonight.map((m) => m.name).join(", ")}
             </p>
           ) : null}
         </Card>

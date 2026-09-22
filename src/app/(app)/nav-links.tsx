@@ -6,9 +6,10 @@ import { cx } from "@/components/ui";
 
 const LINKS = [
   { href: "/", label: "Tonight", icon: "🍽️", parentOnly: false },
+  { href: "/plan", label: "Plan", icon: "🗓️", parentOnly: false },
+  { href: "/grocery", label: "Groceries", icon: "🛒", parentOnly: false },
   { href: "/recipes", label: "Recipes", icon: "📖", parentOnly: false },
   { href: "/family", label: "Family", icon: "👨‍👩‍👧‍👦", parentOnly: false },
-  { href: "/settings", label: "Settings", icon: "⚙️", parentOnly: true },
 ];
 
 export function NavLinks({ isParent, variant }: { isParent: boolean; variant: "top" | "bottom" }) {

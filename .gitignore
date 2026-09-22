@@ -41,6 +41,7 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 /e2e/.auth/
+/e2e/test-results/
 
 # vercel
 .vercel

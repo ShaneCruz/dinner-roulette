@@ -80,6 +80,7 @@ export const settingsInputSchema = z.object({
   healthyNightsTarget: z.number().int().min(0).max(7),
   defaultCooldownDays: z.number().int().min(1).max(60),
   chaosSliceEnabled: z.boolean(),
+  weekStartsOn: z.number().int().min(0).max(6).default(0),
 });
 export type SettingsInput = z.input<typeof settingsInputSchema>;
 
