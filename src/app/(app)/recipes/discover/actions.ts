@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { recipeIdea } from "@/db/schema";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { todayIn } from "@/lib/presence";
 import { dealIdeas, decideIdea, pendingIdeas, writeAcceptedIdea } from "@/lib/recipes/ideas";
@@ -49,6 +51,21 @@ export async function decideIdeaAction(id: string, yes: boolean): Promise<{ erro
   if (!z.uuid().safeParse(id).success) return { error: "Unknown idea." };
   if (!(await decideIdea(db, id, yes, acting.id))) return { error: "Already decided." };
   if (yes) after(() => writeAcceptedIdea(db, id));
+  revalidatePath("/recipes", "layout");
+  return { ok: true };
+}
+
+/** Tries writing a recipe again after it failed. */
+export async function retryIdeaAction(id: string): Promise<{ error: string } | { ok: true }> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(id).success) return { error: "Unknown idea." };
+  const updated = await db
+    .update(recipeIdea)
+    .set({ status: "writing", error: null })
+    .where(and(eq(recipeIdea.id, id), eq(recipeIdea.status, "failed")))
+    .returning({ id: recipeIdea.id });
+  if (!updated.length) return { error: "That one isn't waiting for a retry." };
+  after(() => writeAcceptedIdea(db, id));
   revalidatePath("/recipes", "layout");
   return { ok: true };
 }

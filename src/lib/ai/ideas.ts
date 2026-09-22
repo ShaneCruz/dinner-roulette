@@ -12,7 +12,7 @@ const ideasSchema = z.object({
       cuisine: z.string(),
       activeMinutes: z.number().int(),
       totalMinutes: z.number().int(),
-      healthCategory: z.enum(["healthy", "balanced", "comfort"]),
+      healthCategory: z.string().describe("One of: healthy, balanced, comfort"),
       spiceLevel: z.number().int().describe("0-3, as served to the whole family"),
       kidAppeal: z.string().describe("Short: why kids will eat it"),
       twistOn: z.string().nullable().describe("The family favorite this is a twist on, or null"),
@@ -20,7 +20,10 @@ const ideasSchema = z.object({
   ),
 });
 
-export type DinnerIdea = z.infer<typeof ideasSchema>["ideas"][number];
+type RawIdea = z.infer<typeof ideasSchema>["ideas"][number];
+export type DinnerIdea = Omit<RawIdea, "healthCategory"> & { healthCategory: "healthy" | "balanced" | "comfort" };
+
+const HEALTH = ["healthy", "balanced", "comfort"] as const;
 
 /**
  * Deals a batch of new dinner ideas for the family to swipe through. Mixes
@@ -53,7 +56,13 @@ ${describeFamily(brief)}`,
     maxTokens: 8000,
   });
   const taken = new Set([...known.have, ...known.rejected, ...known.accepted].map((t) => t.toLowerCase()));
-  return result.ideas.filter((i) => i.title.trim() && !taken.has(i.title.trim().toLowerCase())).slice(0, count);
+  return result.ideas
+    .filter((i) => i.title.trim() && !taken.has(i.title.trim().toLowerCase()))
+    .slice(0, count)
+    .map((i) => {
+      const health = i.healthCategory.trim().toLowerCase();
+      return { ...i, healthCategory: (HEALTH as readonly string[]).includes(health) ? (health as DinnerIdea["healthCategory"]) : "balanced" };
+    });
 }
 
 /** Writes the full recipe for an idea the family said yes to. */

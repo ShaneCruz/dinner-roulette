@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, SpiceMeter, cx } from "@/components/ui";
-import { dealMoreAction, decideIdeaAction, type IdeaCard } from "./actions";
+import { dealMoreAction, decideIdeaAction, retryIdeaAction, type IdeaCard } from "./actions";
 
 type Recent = { id: string; title: string; emoji: string; status: string; slug: string | null };
 
@@ -21,7 +21,11 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
   const [queue, setQueue] = useState(initialIdeas);
   // Yeses from this visit show right away; the server's list takes over once it has them.
   const [justAdded, setJustAdded] = useState<Recent[]>([]);
-  const recent = [...justAdded.filter((a) => !saved.some((r) => r.id === a.id)), ...saved];
+  const recent = [
+    ...justAdded.filter((a) => !saved.some((r) => r.id === a.id)),
+    // A retry shows as "writing" until the server's list catches up.
+    ...saved.map((r) => (r.status === "failed" && justAdded.some((a) => a.id === r.id) ? { ...r, status: "writing" } : r)),
+  ];
   const [dealing, setDealing] = useState(false);
   const [line, setLine] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +199,27 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
                   <span className="font-semibold">{r.title}</span>
                 )}
                 <span className="ml-auto text-xs text-muted">
-                  {r.status === "writing" ? "✍️ writing the recipe…" : r.status === "added" ? "✓ in your recipes" : "couldn't write it"}
+                  {r.status === "writing" ? (
+                    "✍️ writing the recipe…"
+                  ) : r.status === "added" ? (
+                    "✓ in your recipes"
+                  ) : (
+                    <button
+                      type="button"
+                      className="font-semibold text-tomato underline"
+                      onClick={() => {
+                        setJustAdded((all) => [{ ...r, status: "writing" }, ...all.filter((a) => a.id !== r.id)]);
+                        retryIdeaAction(r.id)
+                          .then((result) => {
+                            if ("error" in result) setError(result.error);
+                            router.refresh();
+                          })
+                          .catch(() => setError("Lost the connection. Try again."));
+                      }}
+                    >
+                      Couldn&apos;t write it · Try again
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
