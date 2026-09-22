@@ -5,6 +5,8 @@ import { db } from "@/db";
 import { getRecipe, listRecipes, similarRecipes } from "@/lib/recipes/store";
 import { requireParentMember } from "@/lib/session";
 import { DraftActions, RetireButton } from "./draft-actions";
+import { SourceRatingBadge } from "@/components/source-rating";
+import { SourceRatingEditor } from "../source-rating-editor";
 
 export const metadata = { title: "Edit recipe" };
 
@@ -56,6 +58,25 @@ export default async function EditRecipePage({ params }: PageProps<"/recipes/[sl
           <DraftActions id={id} />
         </Card>
       ) : null}
+      <Card className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-bold">Where it came from</p>
+          <p className="text-sm text-muted">
+            {sourceUrl ? (
+              <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline">
+                {new URL(sourceUrl).hostname}
+              </a>
+            ) : (
+              "Added by hand"
+            )}
+            {recipe.sourceRating ? " · rated on that site" : " · no rating yet"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SourceRatingBadge rating={recipe.sourceRating} url={sourceUrl} />
+          <SourceRatingEditor recipeId={id} initialSite={recipe.sourceRating?.site ?? null} />
+        </div>
+      </Card>
       <RecipeForm
         initial={editable}
         existingId={id}
