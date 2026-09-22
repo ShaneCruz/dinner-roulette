@@ -9,6 +9,8 @@ import { faceFor } from "@/lib/ratings/scale";
 import { ratingsByMember } from "@/lib/ratings/store";
 import { Card } from "@/components/ui";
 import { requireActingMember } from "@/lib/session";
+import { loadBadgeStats } from "@/lib/fun/badges";
+import { TrophyShelf } from "@/components/trophy-shelf";
 import {
   AvailabilityEditor,
   FoodRulesEditor,
@@ -36,6 +38,8 @@ export default async function MemberPage({ params }: PageProps<"/family/[id]">) 
   if (!isParent && !isSelf) redirect("/family");
 
   const taste = await tasteProfile(found.id);
+  const stats = (await loadBadgeStats(db, [found.id], todayIn(settings.timezone), settings.weekStartsOn)).get(found.id)!;
+  const trophies = <TrophyShelf stats={stats} name={found.name} />;
 
   const back = (
     <Link href="/family" className="text-sm font-semibold text-muted hover:text-foreground">
@@ -48,6 +52,7 @@ export default async function MemberPage({ params }: PageProps<"/family/[id]">) 
       <div className="mx-auto max-w-2xl space-y-6">
         {back}
         <PageHeader title="Your look" subtitle="Pick an avatar and a chef title. Go wild." />
+        {trophies}
         {taste}
         <OwnLookEditor
           initial={{ avatarEmoji: found.avatarEmoji, avatarColor: found.avatarColor, chefTitle: found.chefTitle }}
@@ -105,6 +110,7 @@ export default async function MemberPage({ params }: PageProps<"/family/[id]">) 
         }}
       />
       {taste}
+      {trophies}
       <FoodRulesEditor memberId={found.id} name={found.name} rules={rules} recipes={recipes} />
       <AvailabilityEditor
         memberId={found.id}

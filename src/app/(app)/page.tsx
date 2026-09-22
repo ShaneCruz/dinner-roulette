@@ -19,7 +19,9 @@ import {
 import { loadPresenceRanges } from "@/lib/presence-data";
 import { mealsNeedingRatings } from "@/lib/ratings/store";
 import { eatersFor, loadEaterContext } from "@/lib/plan/store";
-import { formatDay } from "@/lib/plan/week";
+import { dayOfWeek, formatDay } from "@/lib/plan/week";
+import { loadBadgeStats } from "@/lib/fun/badges";
+import { TrophyShelf } from "@/components/trophy-shelf";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { MadeItButton } from "./tonight-actions";
 
@@ -75,6 +77,14 @@ export default async function HomePage() {
     })
     .filter((x) => x.missing.length > 0);
 
+  // Weekends are for the Sunday session: plan next week together.
+  const dow = dayOfWeek(today);
+  const sessionTime = dow === 5 || dow === 6 || dow === 0;
+  const stats =
+    acting.role === "kid"
+      ? (await loadBadgeStats(db, [acting.id], today, settings.weekStartsOn)).get(acting.id) ?? null
+      : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -105,6 +115,16 @@ export default async function HomePage() {
           </div>
         </Card>
       ))}
+
+      {sessionTime ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-mustard-soft to-surface">
+          <div>
+            <p className="text-lg font-bold">🎉 Sunday session time</p>
+            <p className="text-sm text-muted">Pass the phone, swipe on dinners, veto one thing. The planner does the rest.</p>
+          </div>
+          <ButtonLink href="/session">Let&apos;s play</ButtonLink>
+        </Card>
+      ) : null}
 
       {homecomings.map(({ member, daysUntil, range }) => (
         <Card key={range.id} className="border-mustard bg-mustard-soft">
@@ -197,7 +217,11 @@ export default async function HomePage() {
               <>
                 <h2 className="mt-1 text-2xl font-bold">No plan yet</h2>
                 <p className="mt-1 text-muted">
-                  Pick something for tonight, plan the whole week in one go, or{" "}
+                  Pick something,{" "}
+                  <Link href={`/plan/spin?date=${today}`} className="font-semibold text-tomato underline">
+                    spin the dinner wheel
+                  </Link>
+                  , or{" "}
                   <Link href={`/takeout/spin?date=${today}`} className="font-semibold text-tomato underline">
                     spin for takeout
                   </Link>
@@ -242,6 +266,8 @@ export default async function HomePage() {
           ) : null}
         </Card>
       </div>
+
+      {stats ? <TrophyShelf stats={stats} name={acting.name} compact /> : null}
     </div>
   );
 }

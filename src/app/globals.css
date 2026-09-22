@@ -109,3 +109,14 @@ h3 {
     animation-duration: 0.4s;
   }
 }
+
+.reaction-pop {
+  animation: reaction-pop 1.2s ease-out forwards;
+}
+@keyframes reaction-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(0.8); }
+  15% { opacity: 1; transform: translateY(0) scale(1.08); }
+  25% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}

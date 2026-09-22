@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Avatar, Button, Card, cx } from "@/components/ui";
 import { Wheel, type WheelItem } from "@/components/wheel";
 import type { RestaurantPick } from "@/db/schema";
+import { cuisineEmoji } from "@/lib/cuisine-emoji";
 import { orderFrom } from "../actions";
 
 type Place = {
@@ -16,23 +17,6 @@ type Place = {
   familyOrder: string | null;
 };
 type Member = { id: string; name: string; emoji: string; color: string };
-
-const CUISINE_EMOJI: [RegExp, string][] = [
-  [/mex|taco|burrito/i, "🌮"],
-  [/pizza/i, "🍕"],
-  [/ital|pasta/i, "🍝"],
-  [/chin|asian|thai|viet|pho/i, "🥡"],
-  [/jap|sushi|ramen/i, "🍣"],
-  [/burger|american|diner/i, "🍔"],
-  [/greek|mediter/i, "🥙"],
-  [/indian|curry/i, "🍛"],
-  [/bbq|barbecue|wings|chicken/i, "🍗"],
-  [/sandwich|deli|sub/i, "🥪"],
-];
-
-function cuisineEmoji(cuisine: string) {
-  return CUISINE_EMOJI.find(([re]) => re.test(cuisine))?.[1] ?? "🍽️";
-}
 
 export function TakeoutSpinner({
   date,

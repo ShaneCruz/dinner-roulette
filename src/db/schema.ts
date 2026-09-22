@@ -492,3 +492,68 @@ export const restaurant = pgTable("restaurant", {
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   ...timestamps,
 });
+
+// ---------------------------------------------------------------------------
+// Sunday session, cards, and the wheel
+// ---------------------------------------------------------------------------
+
+/** A swipe in the Sunday session: -1 nope, 1 yes, 2 love (4 when doubled). */
+export const sessionVote = pgTable(
+  "session_vote",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    weekStart: date("week_start").notNull(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    vote: integer("vote").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("session_vote_idx").on(t.weekStart, t.memberId, t.recipeId)],
+);
+
+export const cardType = pgEnum("card_type", ["veto", "double_down", "respin", "chefs_pick"]);
+
+/**
+ * Power-up cards a parent handed out (or the app awarded). Vetoes don't
+ * need grants: every kid gets one per week, tracked in cardUse.
+ */
+export const cardGrant = pgTable("card_grant", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  memberId: uuid("member_id")
+    .notNull()
+    .references(() => member.id, { onDelete: "cascade" }),
+  card: cardType("card").notNull(),
+  reason: text("reason"),
+  grantedByMemberId: uuid("granted_by_member_id").references(() => member.id, { onDelete: "set null" }),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+export const cardUse = pgTable(
+  "card_use",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    card: cardType("card").notNull(),
+    weekStart: date("week_start").notNull(),
+    recipeId: uuid("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("card_use_week_idx").on(t.weekStart, t.memberId)],
+);
+
+export const wheelSpin = pgTable("wheel_spin", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  date: date("date").notNull(),
+  spunByMemberId: uuid("spun_by_member_id").references(() => member.id, { onDelete: "set null" }),
+  recipeId: uuid("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+  /** Set when the chaos slice came up */
+  chaos: text("chaos"),
+  ...timestamps,
+});

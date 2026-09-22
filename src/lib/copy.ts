@@ -61,6 +61,38 @@ const lines = {
     goofball: ["{name} is HOME! The family is complete. Dinner just got 20% louder."],
     dry: ["{name} is home. Welcome back."],
   },
+  swipeStart: {
+    goofball: ["{name}, you're up! Swipe like the fate of dinner depends on it. (It does.)"],
+    dry: ["{name}, your turn. Yes, no, or love. Be decisive."],
+  },
+  passPhone: {
+    goofball: [
+      "Done! Now pass the phone. Gently. It's not a frisbee.",
+      "Votes locked in! Hand the phone to the next hungry human.",
+      "Nice swiping! Pass it on. No peeking at their votes. 👀",
+    ],
+    dry: ["Done. Pass the phone along.", "Votes saved. Next person."],
+  },
+  loveReact: {
+    goofball: ["YES CHEF! 😍", "Put it on the fridge! 😍", "Chef's kiss! 🤌", "Love at first bite!"],
+    dry: ["Noted. 😍", "Strong choice.", "Duly loved."],
+  },
+  yesReact: {
+    goofball: ["Sure, why not! 👍", "Solid! 👍", "Would eat. 👍"],
+    dry: ["Fine by you. 👍", "Acceptable. 👍"],
+  },
+  nopeReact: {
+    goofball: ["Bye bye! 👋", "Into the dinner void! 🕳️", "Not today, food! 🙅"],
+    dry: ["Pass. 👎", "Hard no. Noted.", "Skipped."],
+  },
+  vetoReact: {
+    goofball: ["VETO! 🚫 That dinner has been banished to the shadow realm!", "🚫 VETOED! The dinner has left the chat."],
+    dry: ["🚫 Vetoed. It won't come up this week.", "🚫 Veto played. It's off the table."],
+  },
+  wheelLanded: {
+    goofball: ["The wheel has spoken! 🎡", "Round and round and... DINNER!"],
+    dry: ["The wheel has decided.", "Decision made. By a wheel."],
+  },
 } satisfies Record<string, Line>;
 
 export type LineKey = keyof typeof lines;

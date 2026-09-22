@@ -13,7 +13,7 @@ export async function applySuggestions(
   weekStart: string,
   today: string,
   weekStartsOn: number,
-  options: { onlyDate?: string; random?: () => number; weather?: boolean } = {},
+  options: { onlyDate?: string; random?: () => number; weather?: boolean; replaceSuggested?: boolean } = {},
 ): Promise<number> {
   const { context, nights, chosen, history, firstNightHome } = await loadEngineInputs(db, weekStart, {
     weather: options.weather,
@@ -25,7 +25,9 @@ export async function applySuggestions(
       n.nightType === "cook" &&
       n.status !== "cooked" &&
       n.status !== "skipped" &&
-      (options.onlyDate ? n.date === options.onlyDate : !n.recipeId),
+      (options.onlyDate
+        ? n.date === options.onlyDate
+        : !n.recipeId || (options.replaceSuggested && n.suggested && n.status === "planned")),
   );
   if (!fillable.length) return 0;
 
@@ -33,10 +35,11 @@ export async function applySuggestions(
   const current = options.onlyDate ? nights.find((n) => n.date === options.onlyDate)?.recipeId : null;
   if (options.onlyDate && current) avoid[options.onlyDate] = current;
 
+  const refilling = new Set(fillable.map((n) => n.date));
   const suggestions = suggestWeek(
     fillable,
     context,
-    chosen.filter((c) => c.date !== options.onlyDate),
+    chosen.filter((c) => !refilling.has(c.date)),
     { random: options.random, history, firstNightHome, avoid },
   );
 
