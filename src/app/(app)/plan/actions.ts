@@ -1,6 +1,8 @@
 "use server";
 
+import { and, eq, ilike, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -18,6 +20,13 @@ import { requireParentMember } from "@/lib/session";
 import { getOrCreateWeekPlan } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
 import { applySuggestions } from "@/lib/suggest/apply";
+import { recipe as recipeTable } from "@/db/schema";
+import { loadFamilyBrief } from "@/lib/ai/brief";
+import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
+import { recommendSides, writeSideRecipe } from "@/lib/ai/sides";
+import { ensureNutrition } from "@/lib/nutrition-store";
+import { loadMeals } from "@/lib/plan/store";
+import { getRecipe, saveRecipe, slugify, uniqueSlug } from "@/lib/recipes/store";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -123,4 +132,137 @@ export async function anotherIdeaAction(date: string): Promise<{ error: string }
   });
   if (!filled) return { error: "Out of ideas for that night. Try loosening the time or who's eating." };
   refresh();
+}
+
+export type SideIdea = {
+  existingId: string | null;
+  existingSlug: string | null;
+  title: string;
+  why: string;
+  handsOnMinutes: number;
+  healthy: boolean;
+};
+
+async function tonightsMain(date: string) {
+  const meal = (await loadMeals(db, date, date)).get(date);
+  if (!meal?.recipeId || meal.nightType !== "cook") return null;
+  const main = await getRecipe(db, { id: meal.recipeId });
+  return main ? { meal, main } : null;
+}
+
+/** Suggests sides for a night's dinner: the family's own, plus easy new ideas. */
+export async function recommendSidesAction(date: string): Promise<{ error: string } | { ideas: SideIdea[] }> {
+  await requireParentMember();
+  if (!dateSchema.safeParse(date).success) return { error: "Unknown night." };
+  const found = await tonightsMain(date);
+  if (!found) return { error: "Pick a dinner for that night first." };
+  const sides = await db
+    .select({ id: recipeTable.id, slug: recipeTable.slug, title: recipeTable.title, activeMinutes: recipeTable.activeMinutes, healthCategory: recipeTable.healthCategory })
+    .from(recipeTable)
+    .where(and(eq(recipeTable.kind, "side"), isNull(recipeTable.archivedAt)));
+  const chosen = sides.filter((s) => found.meal.sideRecipeIds.includes(s.id));
+
+  if (!aiEnabled()) {
+    // Without AI: the sides this dinner pairs with, then the rest.
+    const ranked = [...sides].sort((a, b) => Number(found.main.pairsWith.includes(b.slug)) - Number(found.main.pairsWith.includes(a.slug)));
+    return {
+      ideas: ranked
+        .filter((s) => !chosen.some((c) => c.id === s.id))
+        .slice(0, 4)
+        .map((s) => ({ existingId: s.id, existingSlug: s.slug, title: s.title, why: found.main.pairsWith.includes(s.slug) ? "A usual pairing" : "From your sides", handsOnMinutes: s.activeMinutes, healthy: s.healthCategory === "healthy" })),
+    };
+  }
+  try {
+    const brief = await loadFamilyBrief(db);
+    const ideas = await recommendSides(found.main, brief, chosen.map((c) => c.title));
+    return {
+      ideas: ideas.map((idea) => {
+        const existing = idea.existingSlug ? sides.find((s) => s.slug === idea.existingSlug) : undefined;
+        return { ...idea, existingId: existing?.id ?? null, existingSlug: existing?.slug ?? null, title: existing?.title ?? idea.title };
+      }),
+    };
+  } catch (error) {
+    console.error("Side suggestions failed", error);
+    return { error: friendlyAiError(error) };
+  }
+}
+
+/**
+ * Adds a side to a night. A new idea gets a full recipe written and saved to
+ * the family's sides first. Either way the main remembers the pairing, so the
+ * planner offers it next time.
+ */
+export async function addSideAction(
+  date: string,
+  idea: { existingId: string | null; title: string },
+): Promise<{ error: string } | { title: string; slug: string; created: boolean }> {
+  const { settings, acting } = await requireParentMember();
+  if (!dateSchema.safeParse(date).success) return { error: "Unknown night." };
+  const found = await tonightsMain(date);
+  if (!found) return { error: "Pick a dinner for that night first." };
+
+  let side: { id: string; slug: string; title: string } | null = null;
+  let created = false;
+  if (idea.existingId && z.uuid().safeParse(idea.existingId).success) {
+    const [row] = await db
+      .select({ id: recipeTable.id, slug: recipeTable.slug, title: recipeTable.title, kind: recipeTable.kind })
+      .from(recipeTable)
+      .where(eq(recipeTable.id, idea.existingId));
+    if (row?.kind === "side") side = row;
+  } else {
+    const title = idea.title.trim().slice(0, 80);
+    if (!title) return { error: "Which side?" };
+    // Already have one by that name? Use it instead of writing a duplicate.
+    const [same] = await db
+      .select({ id: recipeTable.id, slug: recipeTable.slug, title: recipeTable.title })
+      .from(recipeTable)
+      .where(and(eq(recipeTable.kind, "side"), isNull(recipeTable.archivedAt), ilike(recipeTable.title, title)));
+    if (same) side = same;
+    else {
+      try {
+        const recipe = await writeSideRecipe(title, found.main.title, await loadFamilyBrief(db));
+        if (!recipe) return { error: "Couldn't write that side. Try another one." };
+        const slug = await uniqueSlug(db, slugify(recipe.title));
+        const id = await saveRecipe(db, { ...recipe, slug }, {
+          source: "ai",
+          status: "approved",
+          notes: `Added as a side for ${found.main.title}.`,
+          createdByMemberId: acting.id,
+        });
+        side = { id, slug, title: recipe.title };
+        created = true;
+        after(async () => {
+          try {
+            await ensureNutrition(db, id);
+          } catch (error) {
+            console.error("Nutrition estimate failed", error);
+          }
+        });
+      } catch (error) {
+        console.error("Writing a side failed", error);
+        return { error: friendlyAiError(error) };
+      }
+    }
+  }
+  if (!side) return { error: "That side isn't available." };
+
+  const sideIds = [...new Set([...found.meal.sideRecipeIds, side.id])].slice(-4);
+  const planId = await saveNight(db, date, settings.weekStartsOn, { sideRecipeIds: sideIds });
+  if (!found.main.pairsWith.includes(side.slug)) {
+    await db
+      .update(recipeTable)
+      .set({ pairsWith: [...found.main.pairsWith, side.slug], updatedAt: sql`${recipeTable.updatedAt}` as unknown as Date })
+      .where(eq(recipeTable.id, found.main.id));
+  }
+  await afterChange([planId]);
+  return { title: side.title, slug: side.slug, created };
+}
+
+export async function removeSideAction(date: string, sideId: string) {
+  const { settings } = await requireParentMember();
+  if (!dateSchema.safeParse(date).success || !z.uuid().safeParse(sideId).success) return;
+  const meal = (await loadMeals(db, date, date)).get(date);
+  if (!meal) return;
+  const planId = await saveNight(db, date, settings.weekStartsOn, { sideRecipeIds: meal.sideRecipeIds.filter((id) => id !== sideId) });
+  await afterChange([planId]);
 }

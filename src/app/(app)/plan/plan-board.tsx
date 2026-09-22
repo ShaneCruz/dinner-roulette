@@ -2,6 +2,7 @@
 
 import { isLockedPick } from "@/lib/fun/card-info";
 import { mealNutrition, nutritionLine } from "@/lib/nutrition";
+import { SideRecommender } from "./side-recommender";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -389,8 +390,12 @@ function NightCard({
             <Link href={`/recipes/${recipe.slug}`} className="text-xl font-bold leading-tight hover:underline">
               {recipe.title}
             </Link>
-            {sides.length > 0 ? (
-              <p className="text-sm text-muted">with {sides.map((s) => s.title).join(" + ")}</p>
+            {night.status !== "skipped" ? (
+              <SideRecommender
+                date={night.date}
+                sides={sides.map((side) => ({ id: side.id, slug: side.slug, title: side.title }))}
+                canEdit={canEdit && night.status === "planned"}
+              />
             ) : null}
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Badge tone={tooLong ? "tomato" : "basil"}>⏱ {recipe.activeMinutes} min hands-on</Badge>
