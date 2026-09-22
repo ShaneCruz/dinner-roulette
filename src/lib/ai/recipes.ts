@@ -9,7 +9,10 @@ import {
   VARIANT_KINDS,
   recipeInputSchema,
   type Recipe,
+  type RecipeTag,
+  type Unit,
 } from "@/lib/recipes/schema";
+import { guessSection } from "@/lib/grocery/guess-section";
 import { slugify } from "@/lib/recipes/store";
 import { structured } from "./claude";
 
@@ -18,11 +21,16 @@ import { structured } from "./claude";
 // structured outputs; normalizeAiRecipe() tidies it into a real recipe.
 // ---------------------------------------------------------------------------
 
+// Choice fields are plain strings listing their allowed values: some models
+// occasionally answer off-list, and one stray tag shouldn't sink a whole
+// recipe. normalizeAiRecipe() maps each onto the real choices.
+const oneOf = (values: readonly string[], hint = "") => z.string().describe(`One of: ${values.join(", ")}${hint}`);
+
 const aiIngredient = z.object({
   name: z.string().describe("Lowercase, singular, generic grocery name, e.g. 'yellow onion'"),
   quantity: z.number().nullable().describe("null only for 'to taste'"),
-  unit: z.enum(UNITS),
-  section: z.enum(STORE_SECTIONS),
+  unit: oneOf(UNITS),
+  section: oneOf(STORE_SECTIONS),
   perishable: z.boolean().describe("Goes bad within about a week"),
   note: z.string().nullable().describe("Prep like 'diced', or brand/size like '14.5 oz can'"),
   optional: z.boolean(),
@@ -31,23 +39,23 @@ const aiIngredient = z.object({
 export const aiRecipe = z.object({
   title: z.string(),
   description: z.string().describe("One or two friendly sentences; a little humor is welcome"),
-  kind: z.enum(["main", "side"]),
+  kind: oneOf(["main", "side"]),
   cuisine: z.string(),
-  tags: z.array(z.enum(RECIPE_TAGS)),
-  method: z.enum(COOK_METHODS),
+  tags: z.array(oneOf(RECIPE_TAGS)).describe(`Only from: ${RECIPE_TAGS.join(", ")}`),
+  method: oneOf(COOK_METHODS),
   activeMinutes: z.number().int().describe("Hands-on minutes only"),
   totalMinutes: z.number().int().describe("Start to table, including simmering or slow cooking"),
   baseServings: z.number().int(),
   spiceLevel: z.number().int().describe("0 none, 1 mild, 2 medium, 3 hot, as written"),
   spiceSplit: z.string().nullable().describe("How to add heat to only some portions, or null"),
-  seasonFit: z.enum(["any", "warm", "cold"]),
+  seasonFit: oneOf(["any", "warm", "cold"]),
   indoorMethod: z.string().nullable().describe("For grilled recipes: how to cook it indoors"),
-  healthCategory: z.enum(["healthy", "balanced", "comfort"]),
+  healthCategory: oneOf(["healthy", "balanced", "comfort"]),
   ingredients: z.array(aiIngredient),
   steps: z.array(z.object({ text: z.string(), timerMinutes: z.number().int().nullable() })),
   variants: z.array(
     z.object({
-      kind: z.enum(VARIANT_KINDS),
+      kind: oneOf(VARIANT_KINDS),
       label: z.string(),
       description: z.string(),
       removes: z.array(z.string()).describe("Exact names from ingredients this variant leaves out"),
@@ -136,17 +144,43 @@ export const RULES = `Recipe format rules:
 
 const clampInt = (value: number, min: number, max: number) => Math.min(Math.max(Math.round(value), min), max);
 
+const key = (value: string) => value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  const k = key(value);
+  return (allowed as readonly string[]).includes(k) ? (k as T) : fallback;
+}
+
+const UNIT_ALIASES: Record<string, Unit> = {
+  pound: "lb", pounds: "lb", lbs: "lb", ounce: "oz", ounces: "oz", teaspoon: "tsp", teaspoons: "tsp",
+  tablespoon: "tbsp", tablespoons: "tbsp", tbs: "tbsp", cups: "cup", cloves: "clove", cans: "can", jars: "jar",
+  slices: "slice", packages: "package", pkg: "package", bunches: "bunch", heads: "head", stalks: "stalk",
+  sprigs: "sprig", pinches: "pinch", grams: "g", gram: "g", kilogram: "kg", milliliters: "ml", liter: "l",
+  liters: "l", each: "whole", piece: "whole", pieces: "whole", large: "whole", medium: "whole", small: "whole",
+  "": "whole", fluid_ounce: "fl_oz", fluid_ounces: "fl_oz", "fl oz": "fl_oz", to_taste: "to_taste",
+};
+
+export function normalizeUnit(value: string): Unit {
+  const k = key(value).replace(/\.$/, "");
+  if ((UNITS as readonly string[]).includes(k)) return k as Unit;
+  return UNIT_ALIASES[k] ?? UNIT_ALIASES[value.trim().toLowerCase()] ?? "whole";
+}
+
 export function normalizeAiRecipe(ai: AiRecipe, sideSlugs: string[] = []): { recipe: Recipe; notes: string | null; warnings: string[] } {
   const warnings = [...ai.warnings];
-  const ingredient = (i: AiRecipe["ingredients"][number]) => ({
-    name: i.name.trim().toLowerCase(),
-    quantity: i.unit === "to_taste" || i.quantity === null || !(i.quantity > 0) ? null : i.quantity,
-    unit: i.quantity === null && i.unit !== "pinch" ? ("to_taste" as const) : i.unit,
-    section: i.section,
+  const ingredient = (i: AiRecipe["ingredients"][number]) => {
+    const unit = normalizeUnit(i.unit);
+    const name = i.name.trim().toLowerCase();
+    return {
+    name,
+    quantity: unit === "to_taste" || i.quantity === null || !(i.quantity > 0) ? null : i.quantity,
+    unit: i.quantity === null && unit !== "pinch" ? ("to_taste" as const) : unit,
+    section: pick(i.section, STORE_SECTIONS, guessSection(name)),
     perishable: i.perishable,
     ...(i.note?.trim() ? { note: i.note.trim() } : {}),
     ...(i.optional ? { optional: true } : {}),
-  });
+    };
+  };
   const ingredients = ai.ingredients.filter((i) => i.name.trim()).map(ingredient);
   const names = new Set(ingredients.map((i) => i.name));
   const activeMinutes = clampInt(ai.activeMinutes || 20, 1, 600);
@@ -155,18 +189,18 @@ export function normalizeAiRecipe(ai: AiRecipe, sideSlugs: string[] = []): { rec
     slug: slugify(ai.title),
     title: ai.title.trim(),
     description: ai.description.trim() || ai.title.trim(),
-    kind: ai.kind,
+    kind: pick(ai.kind, ["main", "side"] as const, "main"),
     cuisine: ai.cuisine.trim() || "American",
-    tags: [...new Set(ai.tags)],
-    method: ai.method,
+    tags: [...new Set(ai.tags.map((t) => key(t)).filter((t): t is RecipeTag => (RECIPE_TAGS as readonly string[]).includes(t)))],
+    method: pick(ai.method, COOK_METHODS, "stovetop"),
     activeMinutes,
     totalMinutes: Math.max(clampInt(ai.totalMinutes || activeMinutes, 1, 1440), activeMinutes),
     baseServings: clampInt(ai.baseServings || 4, 1, 40),
     spiceLevel: clampInt(ai.spiceLevel, 0, 3),
     spiceSplit: ai.spiceSplit?.trim() || null,
-    seasonFit: ai.seasonFit,
+    seasonFit: pick(ai.seasonFit, ["any", "warm", "cold"] as const, "any"),
     indoorMethod: ai.indoorMethod?.trim() || null,
-    healthCategory: ai.healthCategory,
+    healthCategory: pick(ai.healthCategory, ["healthy", "balanced", "comfort"] as const, "balanced"),
     cooldownDays: null,
     ingredients: ingredients.length
       ? ingredients
@@ -175,9 +209,9 @@ export function normalizeAiRecipe(ai: AiRecipe, sideSlugs: string[] = []): { rec
       .filter((s) => s.text.trim())
       .map((s) => ({ text: s.text.trim(), ...(s.timerMinutes && s.timerMinutes > 0 ? { timerMinutes: Math.round(s.timerMinutes) } : {}) })),
     variants: ai.variants
-      .filter((v) => v.label.trim())
+      .filter((v) => v.label.trim() && (VARIANT_KINDS as readonly string[]).includes(key(v.kind)))
       .map((v) => ({
-        kind: v.kind,
+        kind: key(v.kind) as (typeof VARIANT_KINDS)[number],
         label: v.label.trim(),
         description: v.description.trim() || v.label.trim(),
         removes: v.removes.map((r) => r.trim().toLowerCase()).filter((r) => names.has(r)),
@@ -186,7 +220,7 @@ export function normalizeAiRecipe(ai: AiRecipe, sideSlugs: string[] = []): { rec
         extraActiveMinutes: clampInt(v.extraActiveMinutes || 0, 0, 240),
         avoids: v.avoids.map((a) => a.trim().toLowerCase()).filter(Boolean),
       })),
-    pairsWith: ai.kind === "main" ? ai.pairsWith.filter((s) => sideSlugs.includes(s)) : [],
+    pairsWith: key(ai.kind) !== "side" ? ai.pairsWith.filter((s) => sideSlugs.includes(s)) : [],
   };
   if (!candidate.steps.length) {
     candidate.steps = [{ text: "Steps weren't included. Add them here." }];

@@ -36,6 +36,8 @@ export function labelDiners(diners: Diner[]): { label: string; diner: Diner; des
   });
 }
 
+const DISH_TAGS = ["mild", "spicy", "kid_friendly", "high_protein", "lighter", "vegetarian", "contains_beef", "shareable"];
+
 const researchSchema = z.object({
   found: z.boolean().describe("false if you couldn't find this restaurant or its menu"),
   summary: z.string().describe("One or two sentences on what the place is known for"),
@@ -48,7 +50,7 @@ const researchSchema = z.object({
         name: z.string(),
         description: z.string().nullable(),
         price: z.string().nullable(),
-        tags: z.array(z.enum(["mild", "spicy", "kid_friendly", "high_protein", "lighter", "vegetarian", "contains_beef", "shareable"])),
+        tags: z.array(z.string()).describe(`Only from: ${DISH_TAGS.join(", ")}`),
       }),
     )
     .describe("8-15 representative dishes, best sellers first"),
@@ -92,7 +94,7 @@ export async function researchRestaurant(
     menuUrl: result.menuUrl,
     priceRange: result.priceRange,
     orderingTips: result.orderingTips,
-    dishes: result.dishes,
+    dishes: result.dishes.map((d) => ({ ...d, tags: d.tags.map((t) => t.trim().toLowerCase().replace(/[\s-]+/g, "_")).filter((t) => DISH_TAGS.includes(t)) })),
     picks: result.picks
       .map((p) => ({ memberId: byLabel.get(p.person.trim().toLowerCase()) ?? "", dish: p.dish, why: p.why }))
       .filter((p) => p.memberId),

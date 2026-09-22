@@ -122,3 +122,37 @@ describe("ratings seen in a screenshot", () => {
     expect(parseRatingText("Grandma's card")).toBeNull();
   });
 });
+
+describe("answers that aren't on the list", () => {
+  it("keeps the recipe and maps stray choices instead of failing", () => {
+    const odd: AiRecipe = {
+      ...base,
+      kind: "Main",
+      method: "baked in oven",
+      tags: ["kid_favorite", "chicken", "Kid Favorite", "baked"],
+      seasonFit: "all year",
+      healthCategory: "Comfort",
+      ingredients: [
+        { name: "Chicken Tenders", quantity: 1.5, unit: "pounds", section: "poultry", perishable: true, note: null, optional: false },
+        { name: "honey", quantity: 3, unit: "Tablespoons", section: "pantry", perishable: false, note: null, optional: false },
+        { name: "egg", quantity: 2, unit: "large", section: "dairy", perishable: true, note: null, optional: false },
+      ],
+      variants: [
+        { kind: "spicy", label: "Hot version", description: "x", removes: [], adds: [], extraSteps: [], extraActiveMinutes: 0, avoids: [] },
+        { kind: "Mild", label: "Mild", description: "No pepper", removes: [], adds: [], extraSteps: [], extraActiveMinutes: 0, avoids: [] },
+      ],
+    };
+    const { recipe } = normalizeAiRecipe(odd);
+    expect(recipe.kind).toBe("main");
+    expect(recipe.method).toBe("stovetop");
+    expect(recipe.tags).toEqual(["kid_favorite"]);
+    expect(recipe.seasonFit).toBe("any");
+    expect(recipe.healthCategory).toBe("comfort");
+    expect(recipe.ingredients.map((i) => [i.unit, i.section])).toEqual([
+      ["lb", "meat"],
+      ["tbsp", "pantry"],
+      ["whole", "dairy"],
+    ]);
+    expect(recipe.variants.map((v) => v.kind)).toEqual(["mild"]);
+  });
+});
