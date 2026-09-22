@@ -16,6 +16,7 @@
     "vercel-build": "npm run db:migrate && next build"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
     "@electric-sql/pglite": "^0.5.8",
     "better-auth": "^1.7.5",
     "drizzle-orm": "^0.45.3",

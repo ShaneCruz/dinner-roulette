@@ -54,6 +54,8 @@ export type NightPatch = Partial<{
   timeBudget: TimeBudget;
   status: "planned" | "cooked" | "skipped";
   notes: string | null;
+  favoredMemberId: string | null;
+  suggestionReason: string | null;
 }>;
 
 /** Creates or updates the dinner on `date`. Returns the week plan id. */

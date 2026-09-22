@@ -15,6 +15,20 @@
       "when": 1790042234396,
       "tag": "0001_plan_and_shop",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790043776383,
+      "tag": "0002_ratings_and_turns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790043788129,
+      "tag": "0003_home_location",
+      "breakpoints": true
     }
   ]
 }

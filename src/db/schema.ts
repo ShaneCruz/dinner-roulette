@@ -88,6 +88,9 @@ export const familySettings = pgTable(
     id: integer("id").primaryKey().default(1),
     familyName: text("family_name").notNull(),
     homeZip: text("home_zip"),
+    /** Looked up from homeZip for weather forecasts */
+    homeLatitude: doublePrecision("home_latitude"),
+    homeLongitude: doublePrecision("home_longitude"),
     timezone: text("timezone").notNull().default("America/Chicago"),
     defaultCooldownDays: integer("default_cooldown_days").notNull().default(14),
     healthyNightsTarget: integer("healthy_nights_target").notNull().default(5),
@@ -328,6 +331,10 @@ export const plannedMeal = pgTable(
     status: mealStatus("status").notNull().default("planned"),
     notes: text("notes"),
     cookedAt: timestamp("cooked_at", { withTimezone: true }),
+    /** Whose turn this night was (their tastes counted double) */
+    favoredMemberId: uuid("favored_member_id").references(() => member.id, { onDelete: "set null" }),
+    /** Short "why this dinner" note when the planner suggested it */
+    suggestionReason: text("suggestion_reason"),
     ...timestamps,
   },
   (t) => [
@@ -401,4 +408,38 @@ export const groceryClaim = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("grocery_claim_idx").on(t.weekPlanId, t.section)],
+);
+
+// ---------------------------------------------------------------------------
+// Ratings
+// ---------------------------------------------------------------------------
+
+/** One person's verdict on one dinner. Parents can enter them for kids. */
+export const rating = pgTable(
+  "rating",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    plannedMealId: uuid("planned_meal_id")
+      .notNull()
+      .references(() => plannedMeal.id, { onDelete: "cascade" }),
+    /** The recipe at the time of rating, so history survives plan edits */
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    enteredByMemberId: uuid("entered_by_member_id").references(() => member.id, { onDelete: "set null" }),
+    /** 1 = never again … 5 = make it every week */
+    stars: integer("stars").notNull(),
+    reasons: text("reasons").array().notNull().default(sql`'{}'::text[]`),
+    note: text("note"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("rating_meal_member_idx").on(t.plannedMealId, t.memberId),
+    index("rating_recipe_idx").on(t.recipeId),
+    index("rating_member_idx").on(t.memberId),
+    check("rating_stars_range", sql`${t.stars} between 1 and 5`),
+  ],
 );

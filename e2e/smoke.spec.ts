@@ -44,6 +44,8 @@ async function expectHealthy(page: Page, path: string) {
 }
 
 test("every page opens without crashing", async ({ page }) => {
+  // The dev server compiles each page on first visit.
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
 
@@ -54,6 +56,7 @@ test("every page opens without crashing", async ({ page }) => {
     "/plan",
     "/plan/print",
     "/grocery",
+    "/history",
     "/recipes",
     "/recipes?kind=side",
     "/recipes/new",
@@ -73,6 +76,11 @@ test("every page opens without crashing", async ({ page }) => {
   await page.goto("/family");
   const firstMember = await page.locator('a[href^="/family/"]:not([href="/family/new"])').first().getAttribute("href");
   if (firstMember) await expectHealthy(page, firstMember);
+
+  // A cooked dinner's rating page, if there is one
+  await page.goto("/history");
+  const rateLinks = page.locator('a[href^="/rate/"]');
+  if (await rateLinks.count()) await expectHealthy(page, (await rateLinks.first().getAttribute("href"))!);
 
   // Grocery print only exists once a week has a plan
   await page.goto("/grocery");

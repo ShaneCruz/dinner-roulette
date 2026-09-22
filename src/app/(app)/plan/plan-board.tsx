@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Avatar, Badge, Button, Card, cx } from "@/components/ui";
-import type { NightView, RecipeOption } from "@/lib/plan/view";
+import type { NightRanking, NightView, RecipeOption } from "@/lib/plan/view";
+import { weatherEmoji } from "@/lib/weather";
 import {
   NIGHT_TYPES,
   TIME_BUDGETS,
@@ -13,10 +14,12 @@ import {
   type TimeBudget,
 } from "@/lib/plan/week";
 import {
+  anotherIdeaAction,
   clearNightAction,
   discardBumpedAction,
   placeBumpedAction,
   skipNightAction,
+  suggestWeekAction,
   swapNightsAction,
   updateNight,
 } from "./actions";
@@ -29,6 +32,8 @@ export function PlanBoard({
   nights,
   options,
   bumped,
+  rankings,
+  weekStart,
   members,
   today,
   canEdit,
@@ -37,6 +42,8 @@ export function PlanBoard({
   nights: NightView[];
   options: RecipeOption[];
   bumped: Bumped[];
+  rankings: Record<string, NightRanking>;
+  weekStart: string;
   members: BoardMember[];
   today: string;
   canEdit: boolean;
@@ -59,6 +66,10 @@ export function PlanBoard({
     });
 
   const futureNights = nights.filter((n) => n.date >= today);
+  const openNights = futureNights.filter(
+    (n) => n.nightType === "cook" && !n.recipeId && n.status !== "skipped" && n.status !== "cooked",
+  ).length;
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <div className={cx("space-y-4", pending && "opacity-70 transition-opacity")}>
@@ -67,6 +78,37 @@ export function PlanBoard({
           {error}
         </p>
       ) : null}
+
+      {canEdit && openNights > 0 ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-plum-soft to-surface">
+          <div>
+            <p className="font-bold">
+              {openNights} open {openNights === 1 ? "night" : "nights"} this week
+            </p>
+            <p className="text-sm text-muted">
+              Let the planner pick, based on who&apos;s home, time, ratings, and whose turn it is.
+            </p>
+          </div>
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              run(async () => {
+                const result = await suggestWeekAction(weekStart);
+                if ("error" in result) return result;
+                setNotice(
+                  result.filled
+                    ? `Planned ${result.filled} ${result.filled === 1 ? "dinner" : "dinners"}. Tap ↻ on any night for another idea.`
+                    : "Couldn't find dinners that fit. Try more time or fewer rules.",
+                );
+              })
+            }
+          >
+            ✨ Suggest dinners
+          </Button>
+        </Card>
+      ) : null}
+      {notice ? <p className="rounded-2xl bg-basil-soft px-4 py-3 text-sm text-basil">{notice}</p> : null}
 
       {bumped.length > 0 ? (
         <Card className="border-mustard bg-mustard-soft">
@@ -132,7 +174,8 @@ export function PlanBoard({
         <RecipePicker
           night={picking}
           options={options}
-          weeknightActiveMinutes={weeknightActiveMinutes}
+          ranking={rankings[picking.date] ?? []}
+          favoredName={members.find((m) => m.id === picking.favoredMemberId)?.name ?? null}
           plannedThisWeek={
             new Map(
               nights
@@ -182,6 +225,7 @@ function NightCard({
   const cooking = night.nightType === "cook";
   const tooLong = recipe && !fitsBudget(recipe, night.timeBudget, weeknightActiveMinutes);
   const eating = new Set(night.eatingIds);
+  const favored = members.find((m) => m.id === night.favoredMemberId) ?? null;
   const todayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -225,8 +269,18 @@ function NightCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-muted">{isToday ? "Tonight" : " "}</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-muted">
+            {isToday ? "Tonight" : " "}
+            {weatherEmoji(night.weather) ? (
+              <span className="ml-1 normal-case tracking-normal" title={`${Math.round(night.weather!.tempMaxF)}°F, ${night.weather!.precipChance}% rain`}>
+                {weatherEmoji(night.weather)} {Math.round(night.weather!.tempMaxF)}°
+              </span>
+            ) : null}
+          </p>
           <h2 className="text-lg font-bold">{formatDay(night.date, "long")}</h2>
+          {cooking && favored ? (
+            <p className="mt-0.5 text-xs font-semibold text-plum">🎯 {favored.name}&apos;s turn</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-1">
           {night.status === "cooked" ? <Badge tone="basil">✓ Cooked</Badge> : null}
@@ -295,15 +349,32 @@ function NightCard({
               {recipe.healthCategory === "healthy" ? <Badge tone="basil">Healthy</Badge> : null}
               {recipe.healthCategory === "comfort" ? <Badge tone="mustard">Comfort</Badge> : null}
             </div>
+            {night.suggestionReason ? (
+              <p className="mt-2 text-sm text-muted">✨ {night.suggestionReason}</p>
+            ) : null}
             {tooLong ? (
               <p className="mt-2 text-xs text-tomato-strong">
                 Takes more time than tonight has ({TIME_BUDGETS[night.timeBudget].hint.toLowerCase()}).
               </p>
             ) : null}
-            {canEdit ? (
-              <button type="button" onClick={onPick} className="mt-2 text-sm font-semibold text-tomato">
-                Change
-              </button>
+            {canEdit && night.status === "planned" ? (
+              <div className="mt-2 flex gap-4">
+                <button type="button" onClick={onPick} className="text-sm font-semibold text-tomato">
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={() => run(() => anotherIdeaAction(night.date))}
+                  className="text-sm font-semibold text-plum"
+                >
+                  ↻ Another idea
+                </button>
+              </div>
+            ) : null}
+            {night.status === "cooked" && night.mealId ? (
+              <Link href={`/rate/${night.mealId}`} className="mt-2 inline-block text-sm font-semibold text-tomato">
+                ⭐ Rate it
+              </Link>
             ) : null}
           </div>
         ) : canEdit ? (
