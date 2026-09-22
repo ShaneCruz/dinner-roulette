@@ -35,3 +35,18 @@ describe("fetchRecipePage", () => {
     await expect(fetchRecipePage("not a url")).rejects.toBeInstanceOf(PageFetchError);
   });
 });
+
+describe("source ratings", () => {
+  it("reads the star rating and count from schema.org data", async () => {
+    const { ratingFromJsonLd, siteName, jsonLdToText } = await import("./fetch-page");
+    expect(ratingFromJsonLd({ aggregateRating: { ratingValue: "4.76", ratingCount: "19542" } })).toEqual({ rating: 4.8, count: 19542 });
+    expect(ratingFromJsonLd({ aggregateRating: { ratingValue: 4.5, reviewCount: 88 } })).toEqual({ rating: 4.5, count: 88 });
+    expect(ratingFromJsonLd({})).toEqual({ rating: null, count: null });
+    expect(ratingFromJsonLd({ aggregateRating: { ratingValue: "nope" } })).toEqual({ rating: null, count: null });
+    expect(siteName("https://www.allrecipes.com/recipe/23600/worlds-best-lasagna/")).toBe("Allrecipes");
+    expect(siteName("https://www.somefoodblog.com/x")).toBe("Somefoodblog");
+    const text = jsonLdToText({ name: "Lasagna", review: [{ a: 1 }], aggregateRating: { ratingValue: 5 } });
+    expect(text).toContain("Lasagna");
+    expect(text).not.toContain("review");
+  });
+});

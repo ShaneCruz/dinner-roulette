@@ -24,6 +24,7 @@ export function DinnerSpinner({
   respins: startingRespins,
   current,
   handPicked,
+  shuffleHref,
 }: {
   date: string;
   options: Option[];
@@ -35,6 +36,8 @@ export function DinnerSpinner({
   respins: number;
   current: string | null;
   handPicked: boolean;
+  /** Deals a different set of dinners onto the wheel */
+  shuffleHref: string | null;
 }) {
   const [alreadySpun, setAlreadySpun] = useState(spunBefore);
   const [respins, setRespins] = useState(startingRespins);
@@ -144,7 +147,14 @@ export function DinnerSpinner({
       ) : null}
 
       <Card>
-        <p className="text-sm font-bold">On the wheel</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-bold">On the wheel</p>
+          {shuffleHref && !result ? (
+            <Link href={shuffleHref} replace scroll={false} className="rounded-full bg-surface-muted px-3 py-1 text-sm font-semibold">
+              🔀 Shuffle the options
+            </Link>
+          ) : null}
+        </div>
         <ul className="mt-2 space-y-1 text-sm">
           {options.map((o) => (
             <li key={o.id}>

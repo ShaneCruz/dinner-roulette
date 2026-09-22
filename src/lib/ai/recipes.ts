@@ -67,7 +67,19 @@ const importResult = z.object({
   found: z.boolean().describe("false if the input doesn't contain a recipe"),
   problem: z.string().nullable().describe("If found is false, a short friendly explanation"),
   recipe: aiRecipe.nullable(),
+  rating: z.string().nullable().describe("Only if the source visibly shows one: site, stars and count, like 'Allrecipes 4.8 12345'; else null"),
 });
+
+/** "Allrecipes 4.8 12,345" → { site: "Allrecipes", rating: 4.8, count: 12345 } */
+export function parseRatingText(text: string | null | undefined): { site: string | null; rating: number | null; count: number | null } | null {
+  if (!text?.trim()) return null;
+  const numbers = [...text.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => Number(m[0].replace(/,/g, "")));
+  const rating = numbers.find((n) => n > 0 && n <= 5 && !Number.isInteger(n)) ?? numbers.find((n) => n > 0 && n <= 5) ?? null;
+  const count = numbers.find((n) => Number.isInteger(n) && n > 5) ?? null;
+  const site = text.replace(/[\d.,()★⭐]+/g, " ").replace(/\b(stars?|ratings?|reviews?)\b/gi, " ").replace(/\s+/g, " ").trim() || null;
+  if (rating === null && count === null) return null;
+  return { site, rating: rating === null ? null : Math.round(rating * 10) / 10, count };
+}
 
 // ---------------------------------------------------------------------------
 // Family context, described without names.

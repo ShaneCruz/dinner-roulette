@@ -26,6 +26,7 @@ import {
   suggestWeekAction,
   swapNightsAction,
   updateNight,
+  addSideAction,
 } from "./actions";
 import { RecipePicker } from "./recipe-picker";
 
@@ -66,7 +67,8 @@ export function PlanBoard({
       try {
         const result = await work();
         if (result?.error) setError(result.error);
-      } catch {
+      } catch (error) {
+        console.error("Plan change failed", error);
         setError("That didn't save. Reload the page and try again.");
       }
     });
@@ -213,10 +215,19 @@ export function PlanBoard({
             )
           }
           onClose={() => setPicking(null)}
-          onPick={(recipeId, sideRecipeIds) => {
+          onPick={(recipeId, sideRecipeIds, newSideTitles) => {
             const date = picking.date;
             setPicking(null);
-            run(() => updateNight(date, { recipeId, sideRecipeIds }));
+            if (newSideTitles.length) setNotice(`Writing ${newSideTitles.join(" and ")}… this takes about 30 seconds.`);
+            run(async () => {
+              const saved = await updateNight(date, { recipeId, sideRecipeIds });
+              if (saved?.error) return saved;
+              for (const title of newSideTitles) {
+                const added = await addSideAction(date, { existingId: null, title });
+                if ("error" in added) return added;
+              }
+              if (newSideTitles.length) setNotice(`Added ${newSideTitles.join(" and ")} to the plan and your sides.`);
+            });
           }}
         />
       ) : null}

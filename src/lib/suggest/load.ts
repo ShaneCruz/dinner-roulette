@@ -64,6 +64,7 @@ export async function loadEngineInputs(db: Database, weekStart: string, options:
     variants: variantRows.filter((v) => v.recipeId === r.id),
     lastCooked: lastCooked.get(r.id) ?? null,
     nutrition: r.nutrition,
+    sourceRating: r.sourceRating !== null || r.sourceRatingCount !== null ? { rating: r.sourceRating, count: r.sourceRatingCount } : null,
   }));
 
   const memberRoles = new Map(

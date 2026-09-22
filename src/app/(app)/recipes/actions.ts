@@ -6,7 +6,9 @@ import { after } from "next/server";
 import { ensureNutrition } from "@/lib/nutrition-store";
 import { friendlyAiError } from "@/lib/ai/claude";
 import { acceptProposal, createProposal, dismissProposal, undoLastChange } from "@/lib/recipes/proposals";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { recipe as recipeTable } from "@/db/schema";
 import { recipeInputSchema, type RecipeInput } from "@/lib/recipes/schema";
 import { deleteRecipe, getRecipe, saveRecipe, setRecipeArchived, slugify, uniqueSlug } from "@/lib/recipes/store";
 import { requireParentMember } from "@/lib/session";
@@ -139,5 +141,21 @@ export async function undoChangeAction(recipeId: string): Promise<{ error: strin
       console.error("Nutrition estimate failed", error);
     }
   });
+  revalidatePath("/", "layout");
+}
+
+/** Records how a recipe is rated on the site it came from (typed in by a parent). */
+export async function setSourceRatingAction(
+  recipeId: string,
+  input: { site: string; rating: number | null; count: number | null },
+): Promise<{ error: string } | void> {
+  await requireParentMember();
+  const site = input.site.trim().slice(0, 40) || null;
+  const rating = input.rating !== null && input.rating > 0 && input.rating <= 5 ? Math.round(input.rating * 10) / 10 : null;
+  const count = input.count !== null && input.count > 0 ? Math.round(input.count) : null;
+  await db
+    .update(recipeTable)
+    .set({ sourceName: site, sourceRating: rating, sourceRatingCount: count, updatedAt: sql`${recipeTable.updatedAt}` as unknown as Date })
+    .where(eq(recipeTable.id, recipeId));
   revalidatePath("/", "layout");
 }

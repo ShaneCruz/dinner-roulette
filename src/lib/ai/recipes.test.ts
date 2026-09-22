@@ -111,3 +111,14 @@ describe("describeFamily", () => {
     expect(text).toContain("Taco Night");
   });
 });
+
+describe("ratings seen in a screenshot", () => {
+  it("pulls the site, stars and count out of a short note", async () => {
+    const { parseRatingText } = await import("./recipes");
+    expect(parseRatingText("Allrecipes 4.8 12,345")).toEqual({ site: "Allrecipes", rating: 4.8, count: 12345 });
+    expect(parseRatingText("Allrecipes ★ 4.7 (2,305 ratings)")).toEqual({ site: "Allrecipes", rating: 4.7, count: 2305 });
+    expect(parseRatingText("Food Network 5 stars")).toEqual({ site: "Food Network", rating: 5, count: null });
+    expect(parseRatingText(null)).toBeNull();
+    expect(parseRatingText("Grandma's card")).toBeNull();
+  });
+});
