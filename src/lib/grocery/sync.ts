@@ -176,3 +176,9 @@ export function useGrocerySync(weekPlanId: string, initial: GrocerySnapshot, act
   const snapshot = pending.reduce((s, op) => applyOp(s, op, actingId), server);
   return { snapshot, change, online, pendingCount: pending.length, lastSynced };
 }
+
+/** The first night an item is needed, or null for things you added yourself. */
+export function neededBy(item: { sources: { date: string }[] }): string | null {
+  const dates = item.sources.map((s) => s.date).sort();
+  return dates[0] ?? null;
+}
