@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { restaurant } from "@/db/schema";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { researchRestaurant } from "@/lib/ai/restaurants";
-import { familyLocation, getRestaurant, isResearchRunning, loadDiners } from "@/lib/restaurants/store";
+import { familyLocation, getRestaurant, isResearchRunning, loadDiners, usualDishes } from "@/lib/restaurants/store";
 import { getActingMember, getParentSession } from "@/lib/session";
 
 // Searching the web for a menu takes a minute or two.
@@ -68,7 +68,7 @@ export async function POST(_request: Request, { params }: RouteContext<"/api/res
   after(async () => {
     try {
       const [diners, location] = await Promise.all([loadDiners(db), familyLocation(db)]);
-      const result = await researchRestaurant(place, diners, location);
+      const result = await researchRestaurant(place, diners, location, usualDishes(place.favorites));
       if ("error" in result) {
         await db.update(restaurant).set({ researchError: result.error, researchStartedAt: null }).where(eq(restaurant.id, id));
         return;

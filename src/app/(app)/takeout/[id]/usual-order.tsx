@@ -127,6 +127,7 @@ export function UsualOrder({
               ) : (
                 <span className={cx(!current && "text-muted")}>{current ?? "No usual yet"}</span>
               )}
+              {current ? <DishNote name={current} research={research} /> : null}
               <button
                 type="button"
                 onClick={() => setChoosing(choosing === p.id ? null : p.id)}
@@ -194,6 +195,18 @@ export function UsualOrder({
         </div>
       ) : null}
     </Card>
+  );
+}
+
+/** What a dish actually is, from the menu lookup. */
+function DishNote({ name, research }: { name: string; research: { dishes: RestaurantDish[] } | null }) {
+  const dish = research?.dishes.find((d) => d.name.toLowerCase() === name.toLowerCase());
+  if (!dish || (!dish.description && !dish.price)) return null;
+  return (
+    <span className="w-full text-xs text-muted">
+      {dish.price ? <span className="font-semibold">{dish.price} · </span> : null}
+      {dish.description}
+    </span>
   );
 }
 
