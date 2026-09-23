@@ -160,6 +160,10 @@ export function RestaurantTools({
               Ordering sites (Toast, DoorDash) and PDF menus can&apos;t be read by a web search. Paste the menu text, or
               take photos of it. Kids&apos; menus are usually a separate tab or page, so include that too.
             </p>
+            <p className="text-sm text-muted">
+              This replaces anything the search guessed. Send a second tab or another photo afterwards and it adds to
+              what you&apos;ve given, so nothing you supply gets lost.
+            </p>
           </div>
           <textarea
             className={cx(inputClass, "min-h-40")}

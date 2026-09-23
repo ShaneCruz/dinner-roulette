@@ -153,7 +153,16 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
           </Card>
 
           <Card>
-            <h2 className="text-xl font-bold">Menu highlights</h2>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-xl font-bold">Menu highlights</h2>
+              {research.menuFrom === "family" ? (
+                <span className="text-sm font-semibold text-basil">✓ From their menu</span>
+              ) : (
+                <span className="text-sm text-muted" title="A search can't see menus kept in ordering apps">
+                  ~ Found by searching
+                </span>
+              )}
+            </div>
             {ourDishes.length ? <p className="text-sm text-muted">⭐ marks what you usually order.</p> : null}
             <ul className="mt-3 divide-y divide-border">
               {[...research.dishes]
