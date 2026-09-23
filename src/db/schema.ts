@@ -545,6 +545,8 @@ export const restaurant = pgTable("restaurant", {
   research: jsonb("research").$type<RestaurantResearch>(),
   favorites: jsonb("favorites").$type<RestaurantFavorites>(),
   researchedAt: timestamp("researched_at", { withTimezone: true }),
+  /** Set while a menu lookup is running, so a second one can't start */
+  researchStartedAt: timestamp("research_started_at", { withTimezone: true }),
   researchError: text("research_error"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   ...timestamps,

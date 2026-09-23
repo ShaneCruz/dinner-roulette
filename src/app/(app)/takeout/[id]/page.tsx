@@ -4,7 +4,7 @@ import { Avatar, Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { aiEnabled } from "@/lib/ai/claude";
 import { withNames } from "@/lib/restaurants/names";
-import { getRestaurant } from "@/lib/restaurants/store";
+import { getRestaurant, isResearchRunning } from "@/lib/restaurants/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
@@ -35,6 +35,7 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
   const [place, members] = await Promise.all([getRestaurant(db, id), getActiveMembers()]);
   if (!place || place.archivedAt) notFound();
   const research = place.research;
+  const running = isResearchRunning(place);
   const isParent = acting.role === "parent";
   const startResearch = (await searchParams).research === "1" && !research;
   const names = new Map(members.map((m) => [m.id, m.name]));
@@ -59,6 +60,7 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
           id={place.id}
           hasResearch={Boolean(research)}
           researchError={place.researchError}
+          researchRunning={running}
           autoStart={startResearch}
           aiOn={aiEnabled()}
           values={{

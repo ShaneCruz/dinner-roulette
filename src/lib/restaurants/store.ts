@@ -1,5 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { friendlyAiError } from "@/lib/ai/claude";
+import { researchRestaurant } from "@/lib/ai/restaurants";
 import type { Database } from "@/db";
 import { familySettings, member, memberFoodRule, plannedMeal, rating, recipe, restaurant } from "@/db/schema";
 import type { Diner } from "@/lib/ai/restaurants";
@@ -56,4 +58,57 @@ export async function familyLocation(db: Database): Promise<string | null> {
   if (!settings?.homeZip) return null;
   const place = await locateZip(settings.homeZip);
   return place ? `${place.city}, ${place.state} (${settings.homeZip})` : settings.homeZip;
+}
+
+/** A menu lookup started recently enough to still be running. */
+export const RESEARCH_STUCK_MINUTES = 8;
+
+export function isResearchRunning(place: { researchStartedAt: Date | null }, now = new Date()): boolean {
+  return Boolean(place.researchStartedAt && now.getTime() - place.researchStartedAt.getTime() < RESEARCH_STUCK_MINUTES * 60_000);
+}
+
+/**
+ * Finishes menu lookups that were started but never completed (the phone
+ * went to sleep, the request was cut off). The scheduler calls this, so a
+ * lookup always lands even if the browser walked away.
+ */
+export async function finishStuckResearch(db: Database, now = new Date(), olderThanMinutes = 3): Promise<number> {
+  const waiting = await db
+    .select()
+    .from(restaurant)
+    .where(and(isNotNull(restaurant.researchStartedAt), isNull(restaurant.archivedAt)));
+  const stale = waiting.filter(
+    (place) => place.researchStartedAt && now.getTime() - place.researchStartedAt.getTime() > olderThanMinutes * 60_000,
+  );
+  let done = 0;
+  for (const place of stale.slice(0, 2)) {
+    // Too old to still be a real attempt: let someone retry it by hand.
+    if (now.getTime() - place.researchStartedAt!.getTime() > 60 * 60_000) {
+      await db
+        .update(restaurant)
+        .set({ researchStartedAt: null, researchError: "That lookup didn't finish. Try again." })
+        .where(eq(restaurant.id, place.id));
+      continue;
+    }
+    try {
+      const [diners, location] = await Promise.all([loadDiners(db), familyLocation(db)]);
+      const result = await researchRestaurant(place, diners, location);
+      await db
+        .update(restaurant)
+        .set(
+          "error" in result
+            ? { researchError: result.error, researchStartedAt: null }
+            : { research: result, researchedAt: new Date(), researchError: null, researchStartedAt: null },
+        )
+        .where(eq(restaurant.id, place.id));
+      done++;
+    } catch (error) {
+      console.error("Finishing a menu lookup failed", error);
+      await db
+        .update(restaurant)
+        .set({ researchError: friendlyAiError(error), researchStartedAt: null })
+        .where(eq(restaurant.id, place.id));
+    }
+  }
+  return done;
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "restaurant" ADD COLUMN "research_started_at" timestamp with time zone;

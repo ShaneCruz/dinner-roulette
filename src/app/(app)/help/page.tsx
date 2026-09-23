@@ -71,7 +71,7 @@ const PARENTS: Section[] = [
   {
     emoji: "🤖",
     title: "What the AI costs",
-    body: "Only some features use AI: adding recipes, Discover, side ideas, nutrition, tweaks and restaurant menus. There's a weekly budget (start: $10) and everything pauses when it runs out. Planning, groceries, wheels and ratings never use AI.",
+    body: "Only some features use AI: adding recipes, Discover, side ideas, nutrition, tweaks and restaurant menus (the priciest at roughly 20-40¢ each). There's a weekly budget (start: $10) and everything pauses when it runs out. Planning, groceries, wheels and ratings never use AI.",
     link: { href: "/settings", label: "See this week's spending" },
   },
 ];
