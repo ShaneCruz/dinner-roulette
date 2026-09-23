@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { seededRandom } from "@/lib/suggest/engine";
-import { chooserOptions, cleanFavorites, orderText, restaurantWeight, usualOrder, weightedIndex } from "./favorites";
+import { chooserOptions, cleanFavorites, findDish, orderText, restaurantWeight, sameDish, usualOrder, weightedIndex } from "./favorites";
 
 const kids = [
   { id: "k1", name: "Kaela" },
@@ -82,5 +82,29 @@ describe("the takeout wheel", () => {
     for (let i = 0; i < 5000; i++) counts[weightedIndex([3, 1], random)]++;
     expect(counts[0] / 5000).toBeGreaterThan(0.7);
     expect(counts[0] / 5000).toBeLessThan(0.8);
+  });
+});
+
+describe("matching what we call a dish to the menu", () => {
+  it("matches renamed and dressed-up menu entries", () => {
+    expect(sameDish("Chips and Guac", "Fresh Chips with Mild Salsa & Guacamole")).toBe(true);
+    expect(sameDish("Chips and Guac", "Fresh Chips & Guacamole")).toBe(true);
+    expect(sameDish("Kids Drum Sticks meal with fries", "Kid's Drumsticks Meal (with fries)")).toBe(true);
+    expect(sameDish("mac and cheese", "Homemade Mac & Cheese")).toBe(true);
+    expect(sameDish("Grilled Cheese", "Grilled Cheese Sandwich")).toBe(true);
+    expect(sameDish("Chicken Burrito Bowl", "chicken burrito bowl")).toBe(true);
+  });
+
+  it("doesn't match different dishes that share a word", () => {
+    expect(sameDish("Chicken Burrito Bowl", "Steak Burrito")).toBe(false);
+    expect(sameDish("Kids Sliders", "Kids Mac and Cheese")).toBe(false);
+    expect(sameDish("Avocado Roll", "Spicy Tuna Roll")).toBe(false);
+  });
+
+  it("finds the menu entry, exact first", () => {
+    const dishes = [{ name: "Chicken Quesadilla" }, { name: "Kid's Quesadilla" }];
+    expect(findDish("Kids Quesadilla", dishes)?.name).toBe("Kid's Quesadilla");
+    expect(findDish("Chicken Quesadilla", dishes)?.name).toBe("Chicken Quesadilla");
+    expect(findDish("Nachos", dishes)).toBeUndefined();
   });
 });

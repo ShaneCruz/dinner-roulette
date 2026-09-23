@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Avatar, Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { aiEnabled } from "@/lib/ai/claude";
+import { sameDish } from "@/lib/restaurants/favorites";
 import { withNames } from "@/lib/restaurants/names";
 import { getRestaurant, isResearchRunning, usualDishes } from "@/lib/restaurants/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
@@ -36,7 +37,8 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
   if (!place || place.archivedAt) notFound();
   const research = place.research;
   const running = isResearchRunning(place);
-  const usuals = new Set(usualDishes(place.favorites).map((d) => d.toLowerCase()));
+  const ourDishes = usualDishes(place.favorites);
+  const isUsual = (name: string) => ourDishes.some((ours) => sameDish(ours, name));
   const isParent = acting.role === "parent";
   const startResearch = (await searchParams).research === "1" && !research;
   const names = new Map(members.map((m) => [m.id, m.name]));
@@ -152,15 +154,15 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
 
           <Card>
             <h2 className="text-xl font-bold">Menu highlights</h2>
-            {usuals.size ? <p className="text-sm text-muted">⭐ marks what you usually order.</p> : null}
+            {ourDishes.length ? <p className="text-sm text-muted">⭐ marks what you usually order.</p> : null}
             <ul className="mt-3 divide-y divide-border">
               {[...research.dishes]
-                .sort((a, b) => Number(usuals.has(b.name.toLowerCase())) - Number(usuals.has(a.name.toLowerCase())))
+                .sort((a, b) => Number(isUsual(b.name)) - Number(isUsual(a.name)))
                 .map((dish) => (
                 <li key={dish.name} className="py-2.5">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="font-semibold">
-                      {usuals.has(dish.name.toLowerCase()) ? "⭐ " : ""}
+                      {isUsual(dish.name) ? "⭐ " : ""}
                       {dish.name}
                     </span>
                     {dish.price ? <span className="max-w-[45%] text-right text-sm text-muted">{dish.price}</span> : null}

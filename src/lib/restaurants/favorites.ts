@@ -124,3 +124,51 @@ export function weightedIndex(weights: number[], random: () => number = Math.ran
   }
   return weights.length - 1;
 }
+
+/**
+ * Matching what you call a dish ("Chips and Guac") to what the menu calls it
+ * ("Fresh Chips with Mild Salsa & Guacamole"). Menus rename things constantly,
+ * so this compares the meaningful words rather than the whole name.
+ */
+const DISH_NOISE = new Set([
+  "the", "a", "and", "with", "of", "our", "fresh", "house", "homemade", "classic", "original", "signature",
+  "served", "side", "small", "large", "regular", "combo", "plate", "platter", "meal", "style", "mild", "new",
+]);
+
+function dishWords(name: string): string[] {
+  return [
+    ...new Set(
+      name
+        .toLowerCase()
+        .replace(/\(.*?\)/g, " ")
+        .split(/[^a-z0-9]+/)
+        .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w))
+        .filter((w) => w.length >= 2 && !DISH_NOISE.has(w)),
+    ),
+  ];
+}
+
+/** "guac" and "guacamole", "drumstick" and "drumsticks": the same word. */
+function sameWord(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.length >= 4 && long.startsWith(short);
+}
+
+/** Do these two names look like the same dish? */
+export function sameDish(a: string, b: string): boolean {
+  const left = dishWords(a);
+  const right = dishWords(b);
+  if (!left.length || !right.length) return false;
+  const shared = left.filter((w) => right.some((r) => sameWord(w, r)));
+  if (!shared.length) return false;
+  // Every word of the shorter name shows up in the longer one ("chips guac"
+  // inside "fresh chips mild salsa guacamole"), or most words match both ways.
+  const shorter = Math.min(left.length, right.length);
+  return shared.length === shorter || shared.length / Math.max(left.length, right.length) >= 0.6;
+}
+
+/** The menu entry for a dish the family named, if there is one. */
+export function findDish<T extends { name: string }>(name: string, dishes: T[]): T | undefined {
+  return dishes.find((d) => d.name.toLowerCase() === name.toLowerCase()) ?? dishes.find((d) => sameDish(d.name, name));
+}
