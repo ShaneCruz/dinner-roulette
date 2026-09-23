@@ -197,3 +197,33 @@ export function sameDish(a: string, b: string): boolean {
 export function findDish<T extends { name: string }>(name: string, dishes: T[]): T | undefined {
   return dishes.find((d) => d.name.toLowerCase() === name.toLowerCase()) ?? dishes.find((d) => sameDish(d.name, name));
 }
+
+/** "$8.99" → 8.99; "$14-22" → 14; anything else → null. */
+export function priceOf(text: string | null | undefined): number | null {
+  const match = text?.match(/\d+(?:\.\d{2})?/);
+  const value = match ? Number(match[0]) : NaN;
+  return Number.isFinite(value) ? value : null;
+}
+
+/** Roughly what the order comes to, when the menu gives prices. */
+export function orderTotal(
+  order: { lines: OrderLine[]; shared: string[] },
+  dishes: { name: string; price: string | null }[],
+): number | null {
+  if (!dishes.length) return null;
+  let total = 0;
+  let priced = 0;
+  for (const line of order.lines) {
+    const price = priceOf(findDish(line.dish, dishes)?.price);
+    if (price === null) continue;
+    total += price * line.count;
+    priced++;
+  }
+  for (const dish of order.shared) {
+    const price = priceOf(findDish(dish, dishes)?.price);
+    if (price === null) continue;
+    total += price;
+    priced++;
+  }
+  return priced ? total : null;
+}

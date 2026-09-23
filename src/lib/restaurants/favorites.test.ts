@@ -118,3 +118,30 @@ describe("matching what we call a dish to the menu", () => {
     expect(findDish("Nachos", dishes)).toBeUndefined();
   });
 });
+
+describe("what the order costs", () => {
+  const dishes = [
+    { name: "Kids Mac and Cheese", price: "$8.99" },
+    { name: "Joe Burger", price: "$16" },
+    { name: "Cheese Curds", price: "$11.50" },
+    { name: "Greek Chicken Salad", price: null },
+  ];
+
+  it("adds up what the menu prices, times how many", async () => {
+    const { orderTotal, priceOf } = await import("./favorites");
+    expect(priceOf("$8.99")).toBe(8.99);
+    expect(priceOf("mains $14-22")).toBe(14);
+    expect(priceOf(null)).toBeNull();
+    const order = {
+      lines: [
+        { dish: "Kid's Mac and Cheese", count: 2, who: ["Alexa", "Brayden"] },
+        { dish: "Joe Burger", count: 1, who: ["Shane"] },
+        { dish: "Greek Chicken Salad", count: 1, who: ["Jamie"] },
+      ],
+      shared: ["Cheese curds"],
+    };
+    // 2 x 8.99 + 16 + 11.50, and the unpriced salad is left out
+    expect(orderTotal(order, dishes)).toBeCloseTo(45.48);
+    expect(orderTotal({ lines: [], shared: [] }, [])).toBeNull();
+  });
+});
