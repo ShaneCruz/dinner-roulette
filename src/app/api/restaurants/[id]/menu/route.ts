@@ -6,6 +6,7 @@ import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { menuFromSource, type MenuSource } from "@/lib/ai/restaurants";
 import { getRestaurant, loadDiners, menuFromFamily, usualDishes } from "@/lib/restaurants/store";
 import { getActingMember, getParentSession } from "@/lib/session";
+import { adminRequest } from "@/lib/admin-auth";
 
 // Reading a long menu (or a few photos of one) takes a little while.
 export const maxDuration = 300;
@@ -14,14 +15,20 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as co
 type ImageType = (typeof IMAGE_TYPES)[number];
 
 /**
- * Reads a menu the family pasted in. Ordering sites (Toast, DoorDash) are
- * apps rather than pages, so search can't see their menus: pasting is the
- * reliable way in, and it's a fraction of the cost of searching.
+ * Reads a menu the family supplied. Ordering sites (Toast, DoorDash) are apps
+ * rather than pages, and plenty of menus are design PDFs, so search can't see
+ * either: supplying the menu is the reliable way in, and it's a fraction of
+ * the cost of searching.
+ *
+ * The maintenance key can post one too, so a menu can be repaired from outside
+ * the app rather than waiting on someone to copy it out by hand.
  */
 export async function POST(request: Request, { params }: RouteContext<"/api/restaurants/[id]/menu">) {
-  if (!(await getParentSession())) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
-  const acting = await getActingMember();
-  if (acting?.role !== "parent") return NextResponse.json({ error: "Only parents can do this." }, { status: 403 });
+  if (!adminRequest(request)) {
+    if (!(await getParentSession())) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
+    const acting = await getActingMember();
+    if (acting?.role !== "parent") return NextResponse.json({ error: "Only parents can do this." }, { status: 403 });
+  }
   if (!aiEnabled()) return NextResponse.json({ error: "AI isn't set up yet." }, { status: 503 });
 
   const { id } = await params;
