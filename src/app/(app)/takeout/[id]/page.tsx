@@ -4,7 +4,7 @@ import { Avatar, Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { aiEnabled } from "@/lib/ai/claude";
 import { withNames } from "@/lib/restaurants/names";
-import { getRestaurant, isResearchRunning } from "@/lib/restaurants/store";
+import { getRestaurant, isResearchRunning, usualDishes } from "@/lib/restaurants/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
@@ -36,6 +36,7 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
   if (!place || place.archivedAt) notFound();
   const research = place.research;
   const running = isResearchRunning(place);
+  const usuals = new Set(usualDishes(place.favorites).map((d) => d.toLowerCase()));
   const isParent = acting.role === "parent";
   const startResearch = (await searchParams).research === "1" && !research;
   const names = new Map(members.map((m) => [m.id, m.name]));
@@ -151,11 +152,17 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
 
           <Card>
             <h2 className="text-xl font-bold">Menu highlights</h2>
+            {usuals.size ? <p className="text-sm text-muted">⭐ marks what you usually order.</p> : null}
             <ul className="mt-3 divide-y divide-border">
-              {research.dishes.map((dish) => (
+              {[...research.dishes]
+                .sort((a, b) => Number(usuals.has(b.name.toLowerCase())) - Number(usuals.has(a.name.toLowerCase())))
+                .map((dish) => (
                 <li key={dish.name} className="py-2.5">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold">{dish.name}</span>
+                    <span className="font-semibold">
+                      {usuals.has(dish.name.toLowerCase()) ? "⭐ " : ""}
+                      {dish.name}
+                    </span>
                     {dish.price ? <span className="max-w-[45%] text-right text-sm text-muted">{dish.price}</span> : null}
                   </div>
                   {dish.description ? <p className="text-sm text-muted">{dish.description}</p> : null}

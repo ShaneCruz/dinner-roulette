@@ -140,6 +140,8 @@ export async function research(options: {
    * results carry enough for most questions.
    */
   readPages?: boolean;
+  /** "fast" searches on Haiku (about a third of the price) */
+  tier?: "balanced" | "fast";
 }): Promise<{ text: string; sources: { title: string; url: string }[] }> {
   const client = getClient();
   const cap = options.costCapCents ?? 40;
@@ -151,24 +153,29 @@ export async function research(options: {
 
   // Each extra round re-sends every page Claude has read, so rounds are the
   // expensive part: two is enough for a menu, and the cost cap is the backstop.
+  const fast = options.tier === "fast";
+  const model = fast ? FAST_MODEL : RESEARCH_MODEL;
   for (let round = 0; round < 2; round++) {
     const response = await client.beta.messages.create({
-      model: RESEARCH_MODEL,
+      model,
       max_tokens: 8000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: options.effort ?? "low" },
+      // Haiku takes neither adaptive thinking nor effort, and only the
+      // older search tool.
+      ...(fast ? {} : { thinking: { type: "adaptive" as const }, output_config: { effort: options.effort ?? "low" } }),
       system: options.system,
       messages,
-      tools: options.readPages
-        ? [
-            { type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 },
-            { type: "web_fetch_20260209", name: "web_fetch", max_uses: 1 },
-          ]
-        : [{ type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 }],
+      tools: fast
+        ? [{ type: "web_search_20250305", name: "web_search", max_uses: options.maxSearches ?? 3 }]
+        : options.readPages
+          ? [
+              { type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 },
+              { type: "web_fetch_20260209", name: "web_fetch", max_uses: 1 },
+            ]
+          : [{ type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 }],
     });
 
-    await recordUsage(options.feature, RESEARCH_MODEL, response.usage);
-    spent += costCents(RESEARCH_MODEL, response.usage);
+    await recordUsage(options.feature, model, response.usage);
+    spent += costCents(model, response.usage);
 
     for (const block of response.content) {
       if (block.type === "text") {

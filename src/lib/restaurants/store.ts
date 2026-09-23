@@ -92,7 +92,7 @@ export async function finishStuckResearch(db: Database, now = new Date(), olderT
     }
     try {
       const [diners, location] = await Promise.all([loadDiners(db), familyLocation(db)]);
-      const result = await researchRestaurant(place, diners, location);
+      const result = await researchRestaurant(place, diners, location, usualDishes(place.favorites));
       await db
         .update(restaurant)
         .set(
@@ -111,4 +111,11 @@ export async function finishStuckResearch(db: Database, now = new Date(), olderT
     }
   }
   return done;
+}
+
+/** Every dish the family has saved as a usual at this place. */
+export function usualDishes(favorites: { people: Record<string, { dishes: string[] }>; shared: string[] } | null): string[] {
+  if (!favorites) return [];
+  const all = [...Object.values(favorites.people).flatMap((p) => p.dishes), ...favorites.shared];
+  return [...new Map(all.map((d) => [d.toLowerCase(), d])).values()].slice(0, 20);
 }
