@@ -208,9 +208,11 @@ export function sameDish(a: string, b: string): boolean {
   const shared = left.filter((w) => right.some((r) => sameWord(w, r)));
   if (!shared.length) return false;
   // Every word of the shorter name shows up in the longer one ("chips guac"
-  // inside "fresh chips mild salsa guacamole"), or most words match both ways.
+  // inside "fresh chips mild salsa guacamole"), or nearly all words match both
+  // ways. The bar is high because one word apart is usually a different dish:
+  // a red dragon roll is not the yellow one.
   const shorter = Math.min(left.length, right.length);
-  return shared.length === shorter || shared.length / Math.max(left.length, right.length) >= 0.6;
+  return shared.length === shorter || shared.length / Math.max(left.length, right.length) >= 0.75;
 }
 
 /** The menu entry for a dish the family named, if there is one. */

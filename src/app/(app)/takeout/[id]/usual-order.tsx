@@ -11,6 +11,7 @@ import {
   FEELINGS,
   orderText,
   orderTotal,
+  priceOf,
   sharedItems,
   usualOrder,
   type ChooserTraits,
@@ -215,6 +216,10 @@ function OrderLine({
   research: { dishes: RestaurantDish[]; picks: RestaurantPick[] } | null;
 }) {
   const menu = research ? findDish(dish, research.dishes) : undefined;
+  // Five muffins cost five dollars, so that's the figure to show. The menu
+  // price goes underneath, since that's what you'll see when you order.
+  const each = priceOf(menu?.price);
+  const line = count > 1 && each !== null ? `$${(each * count).toFixed(2)}` : menu?.price;
   return (
     <li>
       <div className="flex items-baseline justify-between gap-3">
@@ -222,7 +227,14 @@ function OrderLine({
           <span className="font-bold">{count > 1 ? `${count}× ` : ""}</span>
           {dish} <span className="text-sm text-muted">({who})</span>
         </span>
-        {menu?.price ? <span className="shrink-0 text-sm font-semibold">{menu.price}</span> : null}
+        {line ? (
+          <span className="shrink-0 text-right text-sm font-semibold">
+            {line}
+            {count > 1 && each !== null ? (
+              <span className="block text-xs font-normal text-muted">{count} × {menu?.price}</span>
+            ) : null}
+          </span>
+        ) : null}
       </div>
       {menu?.description ? <p className="text-xs text-muted">{menu.description}</p> : null}
     </li>

@@ -137,6 +137,10 @@ describe("matching what we call a dish to the menu", () => {
     expect(sameDish("Chicken Burrito Bowl", "Steak Burrito")).toBe(false);
     expect(sameDish("Kids Sliders", "Kids Mac and Cheese")).toBe(false);
     expect(sameDish("Avocado Roll", "Spicy Tuna Roll")).toBe(false);
+    // One word apart, and that word is the whole difference.
+    expect(sameDish("Red Dragon Roll", "Yellow Dragon Roll")).toBe(false);
+    expect(sameDish("Spicy Dragon Roll", "Yellow Dragon Roll")).toBe(false);
+    expect(sameDish("Chicken Fried Rice", "Shrimp Fried Rice")).toBe(false);
   });
 
   // Taken off Clucker's real ordering menu, where the same dish appears as a
