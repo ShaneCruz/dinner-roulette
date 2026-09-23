@@ -7,11 +7,14 @@ import { updateNight } from "@/app/(app)/plan/actions";
 import { IngredientLine } from "@/app/(app)/recipes/[slug]/recipe-view";
 import { formatAmount, scaleIngredient } from "@/lib/recipes/scale";
 import type { Recipe, VariantInput } from "@/lib/recipes/schema";
+import { cookingPlan, clockAt, startsCookingAt, type Dish } from "@/lib/cook/schedule";
+import { parseClock } from "@/lib/reminders";
 import { ingredientsForStep } from "@/lib/recipes/step-ingredients";
+import { RecipeChat } from "@/components/recipe-chat";
 import { askForNotifications, beep, notify, unlockAudio } from "@/lib/timer-alarm";
 
 type Variant = VariantInput & { forNames: string[] };
-type Timer = { id: number; step: number; label: string; endsAt: number; ringing: boolean };
+type Timer = { id: number; step: number; label: string; title: string; endsAt: number; ringing: boolean };
 
 export function CookMode({
   recipe,
@@ -19,14 +22,27 @@ export function CookMode({
   heatFor,
   startServings,
   tonight,
+  dishes,
+  dinnerTime,
+  canAsk,
+  isParent,
+  recipeId,
 }: {
   recipe: Recipe & { slug: string };
   variants: Variant[];
   heatFor: string[];
   startServings: number;
   tonight: { date: string; mealId: string } | null;
+  /** Everything on tonight's plate, for the whole-meal timeline */
+  dishes: Dish[];
+  dinnerTime: string;
+  canAsk: boolean;
+  isParent: boolean;
+  recipeId: string;
 }) {
   const [servings, setServings] = useState(startServings);
+  const [showPlan, setShowPlan] = useState(false);
+  const [serveAt, setServeAt] = useState(() => parseClock(dinnerTime));
   const [index, setIndex] = useState(-1); // -1 = get ready, steps.length = done
   const [timers, setTimers] = useState<Timer[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -39,6 +55,9 @@ export function CookMode({
   const swipe = useRef<number | null>(null);
 
   const factor = servings / recipe.baseServings;
+  const withSides = dishes.length > 1;
+  const plan = withSides ? cookingPlan(dishes) : [];
+  const startCooking = withSides ? startsCookingAt(dishes) : 0;
   const steps = recipe.steps;
   const total = steps.length;
   const ingredients = recipe.ingredients.map((i) => scaleIngredient(i, factor));
@@ -88,7 +107,7 @@ export function CookMode({
       for (const timer of due) {
         beep();
         navigator.vibrate?.([400, 200, 400, 200, 400]);
-        notify(`Step ${timer.step + 1}: ${timer.label}`);
+        notify(`${timer.title}: ${timer.label}`);
         let rings = 0;
         const ringer = setInterval(() => {
           rings += 1;
@@ -113,13 +132,20 @@ export function CookMode({
     ringers.current.delete(id);
   }
 
-  function startTimer(step: number, minutes: number) {
+  function startTimer(step: number, minutes: number, options: { label?: string; title?: string } = {}) {
     unlockAudio();
     askForNotifications();
     setNow(Date.now());
     setTimers((all) => [
       ...all,
-      { id: nextId.current++, step, label: steps[step].text.slice(0, 60), endsAt: Date.now() + minutes * 60_000, ringing: false },
+      {
+        id: nextId.current++,
+        step,
+        label: options.label ?? steps[step]?.text.slice(0, 60) ?? "",
+        title: options.title ?? `Step ${step + 1}`,
+        endsAt: Date.now() + minutes * 60_000,
+        ringing: false,
+      },
     ]);
   }
 
@@ -163,14 +189,31 @@ export function CookMode({
             ✕
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-lg font-bold leading-tight">{recipe.title}</p>
+            <p className="truncate font-display text-lg font-bold leading-tight">
+              {showPlan ? "Tonight's whole dinner" : recipe.title}
+            </p>
             <p className="text-xs text-muted">
-              {index < 0 ? "Get ready" : index >= total ? "Done!" : `Step ${index + 1} of ${total}`}
+              {showPlan
+                ? `${dishes.length} dishes · start ${startCooking} min before you eat`
+                : index < 0
+                  ? "Get ready"
+                  : index >= total
+                    ? "Done!"
+                    : `Step ${index + 1} of ${total}`}
               {awake ? " · ☀️ screen stays on" : ""}
             </p>
           </div>
+          {withSides ? (
+            <button
+              type="button"
+              onClick={() => setShowPlan(!showPlan)}
+              className="no-print shrink-0 rounded-full bg-mustard-soft px-3 py-1.5 text-sm font-semibold"
+            >
+              {showPlan ? "Just this dish" : "🍽️ Cook everything"}
+            </button>
+          ) : null}
         </div>
-        <div className="mx-auto mt-2 flex max-w-2xl gap-1" aria-hidden>
+        <div className={cx("mx-auto mt-2 flex max-w-2xl gap-1", showPlan && "hidden")} aria-hidden>
           {steps.map((_, i) => (
             <span key={i} className={cx("h-1.5 flex-1 rounded-full", i <= index ? "bg-tomato" : "bg-surface-muted")} />
           ))}
@@ -185,8 +228,8 @@ export function CookMode({
               const clock = hours ? `${hours}:${String(mins).padStart(2, "0")}:${secs}` : `${mins}:${secs}`;
               return (
                 <li key={t.id} className={cx("flex items-center gap-1 rounded-full py-1 pl-3 pr-1 text-sm font-semibold", t.ringing ? "animate-pulse bg-tomato text-white" : "bg-mustard-soft")}>
-                  <button type="button" onClick={() => go(t.step)}>
-                    ⏲ Step {t.step + 1} · {t.ringing ? "Done!" : clock}
+                  <button type="button" onClick={() => (t.step >= 0 && !showPlan ? go(t.step) : undefined)}>
+                    ⏲ {t.title} · {t.ringing ? "Done!" : clock}
                   </button>
                   <button
                     type="button"
@@ -204,7 +247,66 @@ export function CookMode({
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
-        {index < 0 ? (
+        {showPlan ? (
+          <div className="space-y-5">
+            <div className="no-print flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm font-semibold">
+                Eating at
+                <input
+                  type="time"
+                  className="rounded-full border border-border bg-surface px-3 py-1.5"
+                  value={`${String(Math.floor(serveAt / 60)).padStart(2, "0")}:${String(serveAt % 60).padStart(2, "0")}`}
+                  onChange={(e) => setServeAt(parseClock(e.target.value))}
+                />
+              </label>
+              <button type="button" onClick={() => window.print()} className="rounded-full bg-surface-muted px-3 py-1.5 text-sm font-semibold">
+                🖨️ Print this plan
+              </button>
+            </div>
+            <p className="rounded-2xl bg-mustard-soft px-4 py-3 font-semibold">
+              Start cooking at {clockAt(serveAt, startCooking)} to eat at {clockAt(serveAt, 0)}.
+            </p>
+            <ol className="space-y-3">
+              {plan.map((entry, i) => {
+                const running = timers.find((t) => t.title === `${entry.dish} · step ${entry.stepNumber}`);
+                return (
+                  <li key={`${entry.dishId}-${entry.stepNumber}`} className="flex gap-3">
+                    <div className="w-20 shrink-0 text-right">
+                      <p className="font-mono text-sm font-bold">{clockAt(serveAt, entry.startsAt)}</p>
+                      <p className="text-xs text-muted">{entry.startsAt} min</p>
+                    </div>
+                    <div className={cx("min-w-0 flex-1 rounded-2xl p-3", i === 0 ? "bg-tomato-soft" : "bg-surface-muted")}>
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted">{entry.dish}</p>
+                      <p className="mt-0.5 leading-snug">{entry.text}</p>
+                      {entry.timerMinutes ? (
+                        running ? (
+                          <p className="mt-1 text-sm font-semibold text-muted">⏲ Timer running</p>
+                        ) : (
+                          <button
+                            type="button"
+                            className="no-print mt-1 rounded-full bg-mustard px-3 py-1 text-sm font-bold"
+                            onClick={() =>
+                              startTimer(-1, entry.timerMinutes!, {
+                                label: entry.text.slice(0, 60),
+                                title: `${entry.dish} · step ${entry.stepNumber}`,
+                              })
+                            }
+                          >
+                            ▶ {entry.timerMinutes} min timer
+                          </button>
+                        )
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="text-sm text-muted">
+              Times are a guide: waits come from each recipe, hands-on steps are estimated. Tap <b>Just this dish</b> for
+              the full step-by-step of {recipe.title}.
+            </p>
+          </div>
+        ) : index < 0 ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between gap-3">
               <h1 className="text-2xl font-bold">Gather everything</h1>
@@ -277,6 +379,11 @@ export function CookMode({
                   ▶ Start {step.timerMinutes} min timer
                 </button>
               )
+            ) : null}
+            {canAsk ? (
+              <div className="no-print pt-2">
+                <RecipeChat recipeId={recipeId} title={recipe.title} canTweak={isParent} />
+              </div>
             ) : null}
             {mentioned.length ? (
               <div className="rounded-2xl bg-surface-muted p-4">

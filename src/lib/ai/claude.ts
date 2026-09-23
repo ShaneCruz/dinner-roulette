@@ -93,6 +93,32 @@ export async function structured<T extends z.ZodType>(options: {
   return response.parsed_output as z.infer<T>;
 }
 
+/** A short back-and-forth: questions about a recipe while cooking. */
+export async function chat(options: {
+  feature: string;
+  system: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  maxTokens?: number;
+}): Promise<string> {
+  const client = getClient();
+  await checkBudget();
+  const response = await client.beta.messages.create({
+    model: FAST_MODEL,
+    max_tokens: options.maxTokens ?? 1200,
+    system: options.system,
+    messages: options.messages,
+  });
+  await recordUsage(options.feature, FAST_MODEL, response.usage);
+  if (response.stop_reason === "refusal") throw new AiFailedError("Claude couldn't answer that one.");
+  const text = response.content
+    .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+  if (!text) throw new AiFailedError("No answer came back. Try asking again.");
+  return text;
+}
+
 /**
  * Lets Claude use web search and web fetch, and returns its final notes.
  * Handles `pause_turn` (the server's tool loop hitting its iteration cap)
