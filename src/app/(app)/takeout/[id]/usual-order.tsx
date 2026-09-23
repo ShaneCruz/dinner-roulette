@@ -6,6 +6,7 @@ import { Wheel } from "@/components/wheel";
 import type { RestaurantDish, RestaurantFavorites, RestaurantFeeling, RestaurantPick } from "@/db/schema";
 import {
   chooserOptions,
+  findDish,
   EMPTY_FAVORITES,
   FEELINGS,
   orderText,
@@ -200,7 +201,7 @@ export function UsualOrder({
 
 /** What a dish actually is, from the menu lookup. */
 function DishNote({ name, research }: { name: string; research: { dishes: RestaurantDish[] } | null }) {
-  const dish = research?.dishes.find((d) => d.name.toLowerCase() === name.toLowerCase());
+  const dish = research ? findDish(name, research.dishes) : undefined;
   if (!dish || (!dish.description && !dish.price)) return null;
   return (
     <span className="w-full text-xs text-muted">
