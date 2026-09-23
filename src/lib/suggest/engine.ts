@@ -85,6 +85,24 @@ export type EngineContext = {
 };
 
 /** How much a swipe-round vote moves someone's like for a dinner. */
+/**
+ * How much a recipe's rating on the site it came from counts, while the
+ * family hasn't rated it. A 4.8 from thousands of cooks is decent evidence
+ * the recipe works; it says nothing about whether this family will like it,
+ * so it stays smaller than one person's opinion and disappears the moment
+ * anyone here rates the dinner.
+ */
+export function strangersBoost(rating: { rating: number | null; count: number | null } | null | undefined): number {
+  const stars = rating?.rating ?? null;
+  const count = rating?.count ?? 0;
+  if (stars === null || count < 25) return 0;
+  const trust = count >= 1000 ? 1 : count >= 250 ? 0.7 : 0.4;
+  if (stars >= 4.5) return 0.5 * trust;
+  if (stars >= 4.2) return 0.25 * trust;
+  if (stars < 3.8) return -0.4 * trust;
+  return 0;
+}
+
 export function voteBoost(vote: number | undefined): number {
   if (vote === undefined) return 0;
   if (vote < 0) return -1.5;
@@ -254,6 +272,20 @@ export function scoreRecipe(
     score += (total / weights) * 2;
     if (familyAverage !== null && familyAverage >= 4) {
       reasons.push({ text: "Everyone liked it last time", weight: 2.5 });
+    }
+  }
+
+  // Nobody here has rated it yet: lean a little on how it's rated where it came from.
+  const ratedHere = familyStars.length > 0 || eaters.some((e) => e.lovedRecipeIds.includes(recipe.id));
+  if (!ratedHere) {
+    const strangers = strangersBoost(recipe.sourceRating);
+    score += strangers;
+    if (strangers > 0 && recipe.sourceRating?.rating) {
+      const count = recipe.sourceRating.count;
+      reasons.push({
+        text: `${recipe.sourceRating.rating}★ from ${count && count >= 1000 ? `${Math.round(count / 1000)}k` : count} cooks`,
+        weight: 1.3,
+      });
     }
   }
 
