@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Button, Card, cx, inputClass } from "@/components/ui";
 import { archiveRestaurant } from "../actions";
 import { RestaurantForm } from "../restaurant-form";
+import { shrinkImage } from "@/lib/shrink-image";
 
 type Values = { name: string; cuisine: string; area: string; website: string; phone: string; notes: string };
 
@@ -36,6 +37,8 @@ export function RestaurantTools({
   const [pasting, setPasting] = useState(false);
   const [menuText, setMenuText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [menuFiles, setMenuFiles] = useState<File[]>([]);
+  const menuInput = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const started = useRef(false);
 
@@ -154,8 +157,8 @@ export function RestaurantTools({
           <div>
             <p className="font-bold">📋 Paste the menu</p>
             <p className="text-sm text-muted">
-              Ordering sites like Toast and DoorDash are apps, so a web search can&apos;t read their menus. Open the menu,
-              select the text and paste it here. Kids&apos; menus usually live on their own tab, so grab that too.
+              Ordering sites (Toast, DoorDash) and PDF menus can&apos;t be read by a web search. Paste the menu text, or
+              take photos of it. Kids&apos; menus are usually a separate tab or page, so include that too.
             </p>
           </div>
           <textarea
@@ -164,23 +167,38 @@ export function RestaurantTools({
             onChange={(e) => setMenuText(e.target.value)}
             placeholder={"KIDS MINI CHEESEBURGERS $8.99\nKIDS MAC AND CHEESE $8.99\nJOE BURGER $16 — two smashed burgers…"}
           />
+          <input
+            ref={menuInput}
+            type="file"
+            accept="application/pdf,image/*"
+            multiple
+            className="hidden"
+            onChange={async (e) => setMenuFiles(await Promise.all(Array.from(e.target.files ?? []).map((f) => shrinkImage(f))))}
+          />
+          <Button type="button" variant="secondary" onClick={() => menuInput.current?.click()} className="w-full">
+            {menuFiles.length ? `📎 ${menuFiles.length} file${menuFiles.length === 1 ? "" : "s"} ready` : "📷 …or photograph the menu (or pick a PDF)"}
+          </Button>
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
-              disabled={saving || menuText.trim().length < 40}
+              disabled={saving || (menuText.trim().length < 40 && !menuFiles.length)}
               onClick={async () => {
                 setSaving(true);
                 setError(null);
                 try {
-                  const response = await fetch(`/api/restaurants/${id}/menu`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ text: menuText }),
-                  });
+                  const body = menuFiles.length
+                    ? (() => {
+                        const form = new FormData();
+                        menuFiles.forEach((file) => form.append("files", file));
+                        return { body: form };
+                      })()
+                    : { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: menuText }) };
+                  const response = await fetch(`/api/restaurants/${id}/menu`, { method: "POST", ...body });
                   const data = (await response.json().catch(() => ({}))) as { error?: string; dishes?: number };
                   if (!response.ok) setError(data.error ?? "Couldn't read that menu.");
                   else {
                     setMenuText("");
+                    setMenuFiles([]);
                     setPasting(false);
                     router.refresh();
                   }
@@ -193,7 +211,9 @@ export function RestaurantTools({
             >
               {saving ? "Reading the menu…" : "Read this menu"}
             </Button>
-            <span className="text-xs text-muted">About a penny, and far more accurate than searching.</span>
+            <span className="text-xs text-muted">
+              {menuFiles.length ? "A few cents for photos" : "About a penny"}, and far more accurate than searching.
+            </span>
           </div>
         </Card>
       ) : null}

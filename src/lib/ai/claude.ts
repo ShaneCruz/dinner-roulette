@@ -52,7 +52,7 @@ function getClient(): Anthropic {
   return client;
 }
 
-type Content = Anthropic.Beta.BetaContentBlockParam[] | string;
+export type Content = Anthropic.Beta.BetaContentBlockParam[] | string;
 
 export async function structured<T extends z.ZodType>(options: {
   /** What it's for, for the spending report (e.g. "nutrition") */

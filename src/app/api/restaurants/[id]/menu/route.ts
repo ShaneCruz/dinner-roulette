@@ -3,12 +3,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { restaurant } from "@/db/schema";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
-import { menuFromText } from "@/lib/ai/restaurants";
+import { menuFromSource, type MenuSource } from "@/lib/ai/restaurants";
 import { getRestaurant, loadDiners, usualDishes } from "@/lib/restaurants/store";
 import { getActingMember, getParentSession } from "@/lib/session";
 
-// Reading a long menu takes a few seconds.
-export const maxDuration = 120;
+// Reading a long menu (or a few photos of one) takes a little while.
+export const maxDuration = 300;
+
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+type ImageType = (typeof IMAGE_TYPES)[number];
 
 /**
  * Reads a menu the family pasted in. Ordering sites (Toast, DoorDash) are
@@ -26,13 +29,38 @@ export async function POST(request: Request, { params }: RouteContext<"/api/rest
   const place = await getRestaurant(db, id);
   if (!place) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown };
-  const text = typeof body.text === "string" ? body.text.trim() : "";
-  if (text.length < 40) return NextResponse.json({ error: "Paste a bit more of the menu." }, { status: 400 });
+  let source: MenuSource;
+  if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return NextResponse.json({ error: "That upload was too big. Photos are shrunk automatically; PDFs need to be under 4 MB." }, { status: 413 });
+    }
+    const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+    if (!files.length) return NextResponse.json({ error: "Pick a photo or PDF of the menu." }, { status: 400 });
+    if (files.some((f) => f.size > 4 * 1024 * 1024)) return NextResponse.json({ error: "Each file needs to be under 4 MB." }, { status: 400 });
+    if (files[0].type === "application/pdf") {
+      source = { kind: "pdf", data: Buffer.from(await files[0].arrayBuffer()).toString("base64") };
+    } else {
+      if (files.length > 8) return NextResponse.json({ error: "Up to 8 photos at a time, please." }, { status: 400 });
+      const images = [];
+      for (const file of files) {
+        if (!IMAGE_TYPES.includes(file.type as ImageType)) return NextResponse.json({ error: "Photos need to be JPEG, PNG or WebP." }, { status: 400 });
+        images.push({ mediaType: file.type as ImageType, data: Buffer.from(await file.arrayBuffer()).toString("base64") });
+      }
+      source = { kind: "images", images };
+    }
+  } else {
+    const body = (await request.json().catch(() => ({}))) as { text?: unknown };
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (text.length < 40) return NextResponse.json({ error: "Paste a bit more of the menu." }, { status: 400 });
+    source = { kind: "text", text };
+  }
 
   try {
     const diners = await loadDiners(db);
-    const result = await menuFromText(text, diners, usualDishes(place.favorites), place.website);
+    const result = await menuFromSource(source, diners, usualDishes(place.favorites), place.website);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 });
     // Keep anything the earlier lookup found that the pasted menu doesn't mention.
     const pasted = new Set(result.dishes.map((d) => d.name.toLowerCase()));

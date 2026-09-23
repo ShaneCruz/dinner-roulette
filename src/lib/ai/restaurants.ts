@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import type { RestaurantResearch } from "@/db/schema";
-import { research, structured } from "./claude";
+import { research, structured, type Content } from "./claude";
 
 /**
  * Researches a takeout spot: finds its menu online, then picks dishes for
@@ -58,21 +58,41 @@ const researchSchema = z.object({
   familyOrder: z.string().nullable().describe("A suggested order for the whole group, including anything to share"),
 });
 
-/** Turns menu notes (researched or pasted) into the family's takeout guide. */
+/** A menu as the family gave it to us. */
+export type MenuSource =
+  | { kind: "text"; text: string }
+  | { kind: "images"; images: { mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string }[] }
+  | { kind: "pdf"; data: string };
+
+/** Turns menu notes (researched, pasted, photographed) into the family's takeout guide. */
 async function guideFromNotes(
-  notes: { text: string; sources: { title: string; url: string }[] },
+  notes: { text?: string; source?: MenuSource; sources: { title: string; url: string }[] },
   diners: Diner[],
   usuals: string[],
 ): Promise<RestaurantResearch | { error: string }> {
   const labeled = labelDiners(diners);
+  const ask = `${
+    usuals.length ? `\n\nDishes the family always orders (include every one of these in "dishes", with its description and price from the menu; don't invent details): ${usuals.join(", ")}` : ""
+  }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide from the menu above: list every dish you can read (up to 40), with its exact name, description and price. Give exactly one pick per person, using their exact label.`;
+  const content: Content =
+    notes.source && notes.source.kind !== "text"
+      ? [
+          ...(notes.source.kind === "pdf"
+            ? [{ type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: notes.source.data } }]
+            : notes.source.images.map((image) => ({
+                type: "image" as const,
+                source: { type: "base64" as const, media_type: image.mediaType, data: image.data },
+              }))),
+          { type: "text" as const, text: `This is the restaurant's menu.${ask}` },
+        ]
+      : `<menu_notes>\n${notes.text ?? ""}\n</menu_notes>${ask}`;
+
   const result = await structured({
     feature: "restaurant picks",
-    tier: "fast",
+    tier: notes.source && notes.source.kind !== "text" ? "balanced" : "fast",
     system:
       "You turn restaurant menu notes into a short, practical takeout guide for a family, and recommend a dish for each person. Only use dishes that appear in the notes. Respect each person's needs strictly (someone who eats no spicy food gets something truly mild; honor 'never eats' foods).",
-    content: `<menu_notes>\n${notes.text}\n</menu_notes>${
-      usuals.length ? `\n\nDishes the family always orders (include every one of these in "dishes", with its description and price from the notes; don't invent details): ${usuals.join(", ")}` : ""
-    }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide. Give exactly one pick per person, using their exact label.`,
+    content,
     schema: researchSchema,
     effort: "low",
   });
@@ -95,15 +115,18 @@ async function guideFromNotes(
   };
 }
 
-/** Reads a menu the family pasted in (an ordering page, a photo's text). */
-export async function menuFromText(
-  text: string,
+/** Reads a menu the family gave us: pasted text, screenshots, or a PDF. */
+export async function menuFromSource(
+  source: MenuSource,
   diners: Diner[],
   usuals: string[] = [],
   sourceUrl?: string | null,
 ): Promise<RestaurantResearch | { error: string }> {
   return guideFromNotes(
-    { text: text.slice(0, 60_000), sources: sourceUrl ? [{ title: "Pasted menu", url: sourceUrl }] : [] },
+    {
+      ...(source.kind === "text" ? { text: source.text.slice(0, 60_000) } : { source }),
+      sources: sourceUrl ? [{ title: "The restaurant's own menu", url: sourceUrl }] : [],
+    },
     diners,
     usuals,
   );
@@ -134,6 +157,6 @@ export async function researchRestaurant(
   });
   if (!notes.text) return { error: "Couldn't find anything about that restaurant. Check the name and town." };
 
-  return guideFromNotes(notes, diners, usuals);
+  return guideFromNotes({ text: notes.text, sources: notes.sources }, diners, usuals);
 }
 
