@@ -41,3 +41,30 @@ export function useDismissed(key: string): [boolean, () => void] {
   }, [key]);
   return [dismissed, dismiss];
 }
+
+/** Remembers a small choice (a tab, a filter) on this device. */
+export function useStoredChoice<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (value: T) => void] {
+  const stored = useSyncExternalStore(
+    subscribe,
+    () => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  const choose = useCallback(
+    (value: T) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch {
+        // Fine: it just won't be remembered.
+      }
+      listeners.forEach((listener) => listener());
+    },
+    [key],
+  );
+  return [allowed.includes(stored as T) ? (stored as T) : fallback, choose];
+}

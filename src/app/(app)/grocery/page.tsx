@@ -51,6 +51,8 @@ export default async function GroceryPage({ searchParams }: PageProps<"/grocery"
           weekPlanId={plan.id}
           initial={snapshot}
           actingId={acting.id}
+          today={todayIn(settings.timezone)}
+          dates={dates}
           members={members.map((m) => ({ id: m.id, name: m.name, emoji: m.avatarEmoji, color: m.avatarColor }))}
         />
       ) : (
