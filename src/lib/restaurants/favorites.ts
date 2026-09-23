@@ -132,7 +132,10 @@ export function weightedIndex(weights: number[], random: () => number = Math.ran
  */
 const DISH_NOISE = new Set([
   "the", "a", "and", "with", "of", "our", "fresh", "house", "homemade", "classic", "original", "signature",
-  "served", "side", "small", "large", "regular", "combo", "plate", "platter", "meal", "style", "mild", "new",
+  "served", "side", "regular", "combo", "plate", "platter", "meal", "style", "mild", "new",
+  // Compared separately as qualifiers below, so they don't skew the words.
+  "kid", "kids", "junior", "little", "large", "jumbo", "family", "double", "small", "half", "mini", "cup",
+  "veggie", "vegan", "vegetarian", "gluten", "spicy", "hot", "buffalo", "nashville",
 ]);
 
 function dishWords(name: string): string[] {
@@ -148,6 +151,25 @@ function dishWords(name: string): string[] {
   ];
 }
 
+/**
+ * Words that make a dish a different dish, not a fancier name for the same
+ * one: a kid's mac and cheese isn't the mac and cheese, and a large isn't a
+ * small. Both names have to agree on these.
+ */
+const QUALIFIERS: [string, RegExp][] = [
+  ["kids", /\bkid('?s)?\b|\bjunior\b|\blittle\b/],
+  ["size", /\blarge\b|\bjumbo\b|\bfamily\b|\bdouble\b/],
+  ["small", /\bsmall\b|\bhalf\b|\bmini\b|\bcup\b/],
+  ["veg", /\bveggie\b|\bvegan\b|\bvegetarian\b/],
+  ["gf", /\bgluten\b|\bcauliflower crust\b/],
+  ["hot", /\bspicy\b|\bhot\b|\bbuffalo\b|\bnashville\b/],
+];
+
+function qualifiers(name: string): string[] {
+  const text = name.toLowerCase();
+  return QUALIFIERS.filter(([, pattern]) => pattern.test(text)).map(([id]) => id);
+}
+
 /** "guac" and "guacamole", "drumstick" and "drumsticks": the same word. */
 function sameWord(a: string, b: string): boolean {
   if (a === b) return true;
@@ -157,6 +179,9 @@ function sameWord(a: string, b: string): boolean {
 
 /** Do these two names look like the same dish? */
 export function sameDish(a: string, b: string): boolean {
+  const ours = qualifiers(a);
+  const theirs = qualifiers(b);
+  if (ours.length !== theirs.length || ours.some((q) => !theirs.includes(q))) return false;
   const left = dishWords(a);
   const right = dishWords(b);
   if (!left.length || !right.length) return false;

@@ -95,6 +95,16 @@ describe("matching what we call a dish to the menu", () => {
     expect(sameDish("Chicken Burrito Bowl", "chicken burrito bowl")).toBe(true);
   });
 
+  it("keeps a kid's portion separate from the grown-up one", () => {
+    expect(sameDish("Kid's Mac and Cheese", "Kids Mac and Cheese")).toBe(true);
+    expect(sameDish("Kid's Mac and Cheese", "Kids Mac & Cheese")).toBe(true);
+    expect(sameDish("Kid's Mac and Cheese", "Mac and Cheese")).toBe(false);
+    expect(sameDish("Mac and Cheese", "Kids Mac and Cheese")).toBe(false);
+    expect(sameDish("Kids Sliders", "Junior Sliders")).toBe(true);
+    expect(sameDish("Buffalo Wings", "Wings")).toBe(false);
+    expect(sameDish("Large Caesar Salad", "Caesar Salad")).toBe(false);
+  });
+
   it("doesn't match different dishes that share a word", () => {
     expect(sameDish("Chicken Burrito Bowl", "Steak Burrito")).toBe(false);
     expect(sameDish("Kids Sliders", "Kids Mac and Cheese")).toBe(false);
