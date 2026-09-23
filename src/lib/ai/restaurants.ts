@@ -58,6 +58,57 @@ const researchSchema = z.object({
   familyOrder: z.string().nullable().describe("A suggested order for the whole group, including anything to share"),
 });
 
+/** Turns menu notes (researched or pasted) into the family's takeout guide. */
+async function guideFromNotes(
+  notes: { text: string; sources: { title: string; url: string }[] },
+  diners: Diner[],
+  usuals: string[],
+): Promise<RestaurantResearch | { error: string }> {
+  const labeled = labelDiners(diners);
+  const result = await structured({
+    feature: "restaurant picks",
+    tier: "fast",
+    system:
+      "You turn restaurant menu notes into a short, practical takeout guide for a family, and recommend a dish for each person. Only use dishes that appear in the notes. Respect each person's needs strictly (someone who eats no spicy food gets something truly mild; honor 'never eats' foods).",
+    content: `<menu_notes>\n${notes.text}\n</menu_notes>${
+      usuals.length ? `\n\nDishes the family always orders (include every one of these in "dishes", with its description and price from the notes; don't invent details): ${usuals.join(", ")}` : ""
+    }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide. Give exactly one pick per person, using their exact label.`,
+    schema: researchSchema,
+    effort: "low",
+  });
+  if (!result.found || !result.dishes.length) {
+    return { error: "Couldn't find a menu in that. Paste the dishes and prices, or try the lookup." };
+  }
+  const byLabel = new Map(labeled.map((l) => [l.label.toLowerCase(), l.diner.memberId]));
+  return {
+    summary: result.summary,
+    menuUrl: result.menuUrl,
+    priceRange: result.priceRange,
+    orderingTips: result.orderingTips,
+    dishes: result.dishes.map((d) => ({ ...d, tags: d.tags.map((t) => t.trim().toLowerCase().replace(/[\s-]+/g, "_")).filter((t) => DISH_TAGS.includes(t)) })),
+    picks: result.picks
+      .map((p) => ({ memberId: byLabel.get(p.person.trim().toLowerCase()) ?? "", dish: p.dish, why: p.why }))
+      .filter((p) => p.memberId),
+    familyOrder: result.familyOrder,
+    sources: notes.sources.slice(0, 6),
+    labels: Object.fromEntries(labeled.map((l) => [l.label, l.diner.memberId])),
+  };
+}
+
+/** Reads a menu the family pasted in (an ordering page, a photo's text). */
+export async function menuFromText(
+  text: string,
+  diners: Diner[],
+  usuals: string[] = [],
+  sourceUrl?: string | null,
+): Promise<RestaurantResearch | { error: string }> {
+  return guideFromNotes(
+    { text: text.slice(0, 60_000), sources: sourceUrl ? [{ title: "Pasted menu", url: sourceUrl }] : [] },
+    diners,
+    usuals,
+  );
+}
+
 export async function researchRestaurant(
   place: { name: string; cuisine: string; area: string | null; website: string | null },
   diners: Diner[],
@@ -65,7 +116,7 @@ export async function researchRestaurant(
   /** Dishes the family already orders: look these up by name and keep them */
   usuals: string[] = [],
 ): Promise<RestaurantResearch | { error: string }> {
-  const labeled = labelDiners(diners);
+
   const where = place.area || location || "the family's area";
 
   const notes = await research({
@@ -83,33 +134,6 @@ export async function researchRestaurant(
   });
   if (!notes.text) return { error: "Couldn't find anything about that restaurant. Check the name and town." };
 
-  const result = await structured({
-    feature: "restaurant picks",
-    tier: "fast",
-    system:
-      "You turn restaurant research notes into a short, practical takeout guide for a family, and recommend a dish for each person. Only recommend dishes that appear in the notes. Respect each person's needs strictly (someone who eats no spicy food gets something truly mild; honor 'never eats' foods).",
-    content: `<research_notes>\n${notes.text}\n</research_notes>${
-      usuals.length ? `\n\nDishes the family always orders (include every one of these in "dishes", with its description and price from the notes; don't invent details): ${usuals.join(", ")}` : ""
-    }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide. Give exactly one pick per person, using their exact label.`,
-    schema: researchSchema,
-    effort: "low",
-  });
-  if (!result.found || !result.dishes.length) {
-    return { error: "Couldn't find a menu for that restaurant online. Try adding its website." };
-  }
-
-  const byLabel = new Map(labeled.map((l) => [l.label.toLowerCase(), l.diner.memberId]));
-  return {
-    summary: result.summary,
-    menuUrl: result.menuUrl,
-    priceRange: result.priceRange,
-    orderingTips: result.orderingTips,
-    dishes: result.dishes.map((d) => ({ ...d, tags: d.tags.map((t) => t.trim().toLowerCase().replace(/[\s-]+/g, "_")).filter((t) => DISH_TAGS.includes(t)) })),
-    picks: result.picks
-      .map((p) => ({ memberId: byLabel.get(p.person.trim().toLowerCase()) ?? "", dish: p.dish, why: p.why }))
-      .filter((p) => p.memberId),
-    familyOrder: result.familyOrder,
-    sources: notes.sources.slice(0, 6),
-    labels: Object.fromEntries(labeled.map((l) => [l.label, l.diner.memberId])),
-  };
+  return guideFromNotes(notes, diners, usuals);
 }
+

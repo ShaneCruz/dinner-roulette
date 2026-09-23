@@ -10,6 +10,7 @@ import {
   EMPTY_FAVORITES,
   FEELINGS,
   orderText,
+  orderTotal,
   usualOrder,
   type ChooserTraits,
 } from "@/lib/restaurants/favorites";
@@ -49,6 +50,7 @@ export function UsualOrder({
   const diners = people.filter((p) => eating.includes(p.id));
   const order = usualOrder(favorites, diners, choices);
   const text = orderText(order, restaurantName);
+  const total = orderTotal(order, research?.dishes ?? []);
 
   if (editing) {
     return (
@@ -154,19 +156,19 @@ export function UsualOrder({
       {order.lines.length || order.shared.length ? (
         <div className="rounded-2xl bg-basil-soft p-4">
           <p className="text-sm font-bold uppercase tracking-widest text-basil">The order</p>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 space-y-2">
             {order.lines.map((l) => (
-              <li key={l.dish}>
-                <span className="font-bold">{l.count > 1 ? `${l.count}× ` : ""}</span>
-                {l.dish} <span className="text-sm text-muted">({l.who.join(", ")})</span>
-              </li>
+              <OrderLine key={l.dish} dish={l.dish} count={l.count} who={l.who.join(", ")} research={research} />
             ))}
             {order.shared.map((s) => (
-              <li key={s}>
-                {s} <span className="text-sm text-muted">(to share)</span>
-              </li>
+              <OrderLine key={s} dish={s} count={1} who="to share" research={research} />
             ))}
           </ul>
+          {total ? (
+            <p className="mt-2 text-sm font-semibold">
+              About ${total.toFixed(2)} {order.missing.length ? "so far" : "before tax and tip"}
+            </p>
+          ) : null}
           {order.missing.length ? (
             <p className="mt-2 text-sm text-muted">Still deciding: {order.missing.join(", ")}</p>
           ) : null}
@@ -196,6 +198,33 @@ export function UsualOrder({
         </div>
       ) : null}
     </Card>
+  );
+}
+
+/** One line of the order: what it is, who it's for, and what it costs. */
+function OrderLine({
+  dish,
+  count,
+  who,
+  research,
+}: {
+  dish: string;
+  count: number;
+  who: string;
+  research: { dishes: RestaurantDish[]; picks: RestaurantPick[] } | null;
+}) {
+  const menu = research ? findDish(dish, research.dishes) : undefined;
+  return (
+    <li>
+      <div className="flex items-baseline justify-between gap-3">
+        <span>
+          <span className="font-bold">{count > 1 ? `${count}× ` : ""}</span>
+          {dish} <span className="text-sm text-muted">({who})</span>
+        </span>
+        {menu?.price ? <span className="shrink-0 text-sm font-semibold">{menu.price}</span> : null}
+      </div>
+      {menu?.description ? <p className="text-xs text-muted">{menu.description}</p> : null}
+    </li>
   );
 }
 
