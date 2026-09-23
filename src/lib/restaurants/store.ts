@@ -4,7 +4,7 @@ import { friendlyAiError } from "@/lib/ai/claude";
 import { researchRestaurant } from "@/lib/ai/restaurants";
 import type { Database } from "@/db";
 import { familySettings, member, memberFoodRule, plannedMeal, rating, recipe, restaurant } from "@/db/schema";
-import type { RestaurantFavorites } from "@/db/schema";
+import type { RestaurantFavorites, RestaurantResearch } from "@/db/schema";
 import { sharedItems } from "@/lib/restaurants/favorites";
 import type { Diner } from "@/lib/ai/restaurants";
 import { locateZip } from "@/lib/weather";
@@ -100,7 +100,12 @@ export async function finishStuckResearch(db: Database, now = new Date(), olderT
         .set(
           "error" in result
             ? { researchError: result.error, researchStartedAt: null }
-            : { research: result, researchedAt: new Date(), researchError: null, researchStartedAt: null },
+            : {
+                research: { ...result, menuFrom: "search" as const },
+                researchedAt: new Date(),
+                researchError: null,
+                researchStartedAt: null,
+              },
         )
         .where(eq(restaurant.id, place.id));
       done++;
@@ -113,6 +118,22 @@ export async function finishStuckResearch(db: Database, now = new Date(), olderT
     }
   }
   return done;
+}
+
+/**
+ * The menu after the family supplies one. A web search will happily invent
+ * plausible dishes for a restaurant whose real menu lives in an ordering app,
+ * so what the family gives us replaces that outright. It only adds to an
+ * earlier menu they gave us, because menus arrive a tab or a photo at a time.
+ */
+export function menuFromFamily(
+  previous: RestaurantResearch | null | undefined,
+  incoming: RestaurantResearch,
+): RestaurantResearch {
+  const given = new Set(incoming.dishes.map((d) => d.name.toLowerCase()));
+  const kept =
+    previous?.menuFrom === "family" ? previous.dishes.filter((d) => !given.has(d.name.toLowerCase())) : [];
+  return { ...incoming, menuFrom: "family", dishes: [...incoming.dishes, ...kept].slice(0, 40) };
 }
 
 /** Every dish the family has saved as a usual at this place. */

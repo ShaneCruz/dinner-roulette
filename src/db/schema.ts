@@ -522,6 +522,13 @@ export type RestaurantResearch = {
   sources: { title: string; url: string }[];
   /** "Person A" → member id, to show names in place of the anonymous labels */
   labels?: Record<string, string>;
+  /**
+   * Where the dishes came from. A web search often invents plausible dishes
+   * for a restaurant whose menu lives in an ordering app, so a menu the family
+   * supplied replaces those outright — but adds to an earlier supplied one,
+   * since menus arrive a tab or a photo at a time.
+   */
+  menuFrom?: "search" | "family";
 };
 
 /** How someone feels about a restaurant overall. */

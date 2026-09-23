@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { restaurant } from "@/db/schema";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { menuFromSource, type MenuSource } from "@/lib/ai/restaurants";
-import { getRestaurant, loadDiners, usualDishes } from "@/lib/restaurants/store";
+import { getRestaurant, loadDiners, menuFromFamily, usualDishes } from "@/lib/restaurants/store";
 import { getActingMember, getParentSession } from "@/lib/session";
 
 // Reading a long menu (or a few photos of one) takes a little while.
@@ -62,13 +62,10 @@ export async function POST(request: Request, { params }: RouteContext<"/api/rest
     const diners = await loadDiners(db);
     const result = await menuFromSource(source, diners, usualDishes(place.favorites), place.website);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 422 });
-    // Keep anything the earlier lookup found that the pasted menu doesn't mention.
-    const pasted = new Set(result.dishes.map((d) => d.name.toLowerCase()));
-    const kept = (place.research?.dishes ?? []).filter((d) => !pasted.has(d.name.toLowerCase()));
     await db
       .update(restaurant)
       .set({
-        research: { ...result, dishes: [...result.dishes, ...kept].slice(0, 40) },
+        research: menuFromFamily(place.research, result),
         researchedAt: new Date(),
         researchError: null,
         researchStartedAt: null,
