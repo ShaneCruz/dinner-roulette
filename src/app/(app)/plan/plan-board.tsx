@@ -279,7 +279,13 @@ function NightCard({
     (!recipe || (Boolean(night.suggestionReason) && !isLockedPick(night.suggestionReason)));
 
   useEffect(() => {
-    if (isToday) todayRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (!isToday) return;
+    const card = todayRef.current;
+    // Early in the week tonight is already on screen, and jumping anyway would
+    // scroll the page's own buttons (Takeout, groceries, the Sunday session)
+    // out of sight for no gain. Only go looking when it's genuinely below.
+    if (!card || card.getBoundingClientRect().top < window.innerHeight) return;
+    card.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [isToday]);
 
   // Past nights shrink to one line; tap to open them back up.

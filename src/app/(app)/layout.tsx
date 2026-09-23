@@ -20,17 +20,25 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <nav className="hidden flex-1 sm:block" aria-label="Main">
             <NavLinks isParent={isParent} variant="top" />
           </nav>
+          <Link
+            href="/family"
+            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-lg hover:bg-surface-muted"
+            aria-label="The crew"
+            title="The crew"
+          >
+            👨‍👩‍👧‍👦
+          </Link>
           {isParent ? (
             <Link
               href="/settings"
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-lg hover:bg-surface-muted"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-lg hover:bg-surface-muted"
               aria-label="Settings"
               title="Settings"
             >
               ⚙️
             </Link>
           ) : null}
-          <form action={switchMember} className={isParent ? "" : "ml-auto"}>
+          <form action={switchMember}>
             <button
               type="submit"
               className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 hover:bg-surface-muted"
