@@ -67,7 +67,15 @@ const favoritesSchema = z.object({
     z.uuid(),
     z.object({ dishes: z.array(z.string().max(120)).max(20), feeling: z.enum(["love", "fine", "meh"]).nullable() }),
   ),
-  shared: z.array(z.string().max(120)).max(30),
+  // A bare name is how these were saved before quantities; still accepted.
+  shared: z
+    .array(
+      z.union([
+        z.string().max(120),
+        z.object({ dish: z.string().max(120), qty: z.union([z.number().int().min(1).max(20), z.literal("each")]) }),
+      ]),
+    )
+    .max(30),
 });
 
 /**

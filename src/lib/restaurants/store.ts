@@ -4,6 +4,8 @@ import { friendlyAiError } from "@/lib/ai/claude";
 import { researchRestaurant } from "@/lib/ai/restaurants";
 import type { Database } from "@/db";
 import { familySettings, member, memberFoodRule, plannedMeal, rating, recipe, restaurant } from "@/db/schema";
+import type { RestaurantFavorites } from "@/db/schema";
+import { sharedItems } from "@/lib/restaurants/favorites";
 import type { Diner } from "@/lib/ai/restaurants";
 import { locateZip } from "@/lib/weather";
 
@@ -114,8 +116,11 @@ export async function finishStuckResearch(db: Database, now = new Date(), olderT
 }
 
 /** Every dish the family has saved as a usual at this place. */
-export function usualDishes(favorites: { people: Record<string, { dishes: string[] }>; shared: string[] } | null): string[] {
+export function usualDishes(favorites: RestaurantFavorites | null): string[] {
   if (!favorites) return [];
-  const all = [...Object.values(favorites.people).flatMap((p) => p.dishes), ...favorites.shared];
+  const all = [
+    ...Object.values(favorites.people).flatMap((p) => p.dishes),
+    ...sharedItems(favorites).map((s) => s.dish),
+  ];
   return [...new Map(all.map((d) => [d.toLowerCase(), d])).values()].slice(0, 20);
 }

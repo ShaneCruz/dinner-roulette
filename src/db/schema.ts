@@ -527,10 +527,14 @@ export type RestaurantResearch = {
 /** How someone feels about a restaurant overall. */
 export type RestaurantFeeling = "love" | "fine" | "meh";
 
+/** Something for the table, and how many: a count, or one each for whoever's eating. */
+export type SharedItem = { dish: string; qty: number | "each" };
+
 /** The family's usual order: each person's go-to dishes, plus things for the table. */
 export type RestaurantFavorites = {
   people: Record<string, { dishes: string[]; feeling: RestaurantFeeling | null }>;
-  shared: string[];
+  /** Rows saved before quantities existed hold plain strings, and read as one. */
+  shared: (string | SharedItem)[];
 };
 
 export const restaurant = pgTable("restaurant", {
