@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run vercel-build",
-  "crons": [{ "path": "/api/cron", "schedule": "0 15 * * *" }]
+  "crons": [{ "path": "/api/cron", "schedule": "0 15 * * *" }],
+  "git": {
+    "deploymentEnabled": {
+      "*": false,
+      "main": true
+    }
+  }
 }
