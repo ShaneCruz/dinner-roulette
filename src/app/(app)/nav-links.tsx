@@ -4,12 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/components/ui";
 
+// The five things we do on a given evening. Takeout earns a place because
+// ordering in is as common here as cooking; the family profiles don't, since
+// they're set up once and then barely touched — they live by the avatar.
 const LINKS = [
   { href: "/", label: "Tonight", icon: "🍽️", parentOnly: false },
   { href: "/plan", label: "Plan", icon: "🗓️", parentOnly: false },
+  { href: "/takeout", label: "Takeout", icon: "🛵", parentOnly: false },
   { href: "/grocery", label: "Groceries", icon: "🛒", parentOnly: false },
   { href: "/recipes", label: "Recipes", icon: "📖", parentOnly: false },
-  { href: "/family", label: "Family", icon: "👨‍👩‍👧‍👦", parentOnly: false },
 ];
 
 export function NavLinks({ isParent, variant }: { isParent: boolean; variant: "top" | "bottom" }) {
