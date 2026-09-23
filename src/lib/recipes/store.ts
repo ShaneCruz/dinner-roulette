@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db";
 import { findSimilar } from "./similar";
 import { recipe, recipeIngredient, recipeVariant, type Nutrition } from "@/db/schema";
@@ -222,10 +222,11 @@ export async function getRecipe(
 
 export async function listRecipes(
   db: Database,
-  filters: { search?: string; kind?: "main" | "side"; includeArchived?: boolean } = {},
+  filters: { search?: string; kind?: "main" | "side"; includeArchived?: boolean; onlyArchived?: boolean } = {},
 ): Promise<RecipeSummary[]> {
   const conditions = [];
-  if (!filters.includeArchived) conditions.push(isNull(recipe.archivedAt));
+  if (filters.onlyArchived) conditions.push(isNotNull(recipe.archivedAt));
+  else if (!filters.includeArchived) conditions.push(isNull(recipe.archivedAt));
   if (filters.kind) conditions.push(eq(recipe.kind, filters.kind));
   if (filters.search?.trim()) {
     const term = `%${filters.search.trim()}%`;

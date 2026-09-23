@@ -13,21 +13,31 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
   const params = await searchParams;
   const search = typeof params.q === "string" ? params.q : "";
   const kind = params.kind === "side" ? "side" : params.kind === "all" ? undefined : "main";
-  const recipes = await listRecipes(db, { search, kind });
+  const archivedOnly = params.show === "archived";
+  const [recipes, archivedCount] = await Promise.all([
+    listRecipes(db, { search, kind: archivedOnly ? undefined : kind, onlyArchived: archivedOnly }),
+    listRecipes(db, { onlyArchived: true }).then((all) => all.length),
+  ]);
 
   const tabs = [
     { id: "main", label: "Dinners" },
     { id: "side", label: "Sides" },
     { id: "all", label: "Everything" },
+    ...(archivedCount ? [{ id: "archived", label: `Archived (${archivedCount})` }] : []),
   ];
-  const currentTab = kind ?? "all";
-  const tabHref = (id: string) => `/recipes?kind=${id}${search ? `&q=${encodeURIComponent(search)}` : ""}`;
+  const currentTab = archivedOnly ? "archived" : kind ?? "all";
+  const tabHref = (id: string) =>
+    `/recipes?${id === "archived" ? "show=archived" : `kind=${id}`}${search ? `&q=${encodeURIComponent(search)}` : ""}`;
 
   return (
     <div>
       <PageHeader
         title="Recipe box"
-        subtitle={`${recipes.length} ${recipes.length === 1 ? "recipe" : "recipes"}`}
+        subtitle={
+          archivedOnly
+            ? "Retired recipes. Open one and tap Restore to bring it back."
+            : `${recipes.length} ${recipes.length === 1 ? "recipe" : "recipes"}`
+        }
         actions={
           acting.role === "parent" ? (
             <>
@@ -44,7 +54,7 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
       />
 
       <form className="mb-4" role="search">
-        <input type="hidden" name="kind" value={currentTab} />
+        <input type="hidden" name={archivedOnly ? "show" : "kind"} value={archivedOnly ? "archived" : currentTab} />
         <input
           name="q"
           type="search"
@@ -70,7 +80,9 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
       </div>
 
       {recipes.length === 0 ? (
-        <p className="py-12 text-center text-muted">{say("noRecipesFound", acting.humorDial)}</p>
+        <p className="py-12 text-center text-muted">
+          {archivedOnly ? "Nothing archived." : say("noRecipesFound", acting.humorDial)}
+        </p>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {recipes.map((recipe) => (
