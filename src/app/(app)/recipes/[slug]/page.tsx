@@ -21,6 +21,7 @@ import { RecipeView } from "./recipe-view";
 import { SourceRatingBadge } from "@/components/source-rating";
 import { SourceRatingEditor } from "./source-rating-editor";
 import { RecipeTweaks } from "./recipe-tweaks";
+import { RecipeChat } from "@/components/recipe-chat";
 import { diffRecipes } from "@/lib/recipes/diff";
 import { latestRevision, pendingProposal } from "@/lib/recipes/proposals";
 import { REASONS, reasonLabel } from "@/lib/ratings/scale";
@@ -179,6 +180,12 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         heatFor={heatFor}
         sides={sides}
       />
+
+      {aiEnabled() ? (
+        <div className="mt-6">
+          <RecipeChat recipeId={recipe.id} title={recipe.title} canTweak={isParent} />
+        </div>
+      ) : null}
 
       <RatingsSummary ratings={ratings} members={members} />
 

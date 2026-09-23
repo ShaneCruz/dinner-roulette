@@ -11,7 +11,13 @@ import { db } from "@/db";
 import { recipe as recipeTable } from "@/db/schema";
 import { recipeInputSchema, type RecipeInput } from "@/lib/recipes/schema";
 import { deleteRecipe, getRecipe, saveRecipe, setRecipeArchived, slugify, uniqueSlug } from "@/lib/recipes/store";
-import { requireParentMember } from "@/lib/session";
+import { requireActingMember, requireParentMember } from "@/lib/session";
+import { z } from "zod";
+import { loadFamilyBrief } from "@/lib/ai/brief";
+import { askAboutRecipe } from "@/lib/ai/kitchen";
+import { eatersFor, loadEaterContext, loadMeals, servingsFor } from "@/lib/plan/store";
+import { todayIn } from "@/lib/presence";
+import { listRecipes } from "@/lib/recipes/store";
 
 export async function saveRecipeAction(
   input: RecipeInput,
@@ -158,4 +164,49 @@ export async function setSourceRatingAction(
     .set({ sourceName: site, sourceRating: rating, sourceRatingCount: count, updatedAt: sql`${recipeTable.updatedAt}` as unknown as Date })
     .where(eq(recipeTable.id, recipeId));
   revalidatePath("/", "layout");
+}
+
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+
+/** Answers a question about a recipe, for whoever is cooking. */
+export async function askRecipeQuestion(
+  recipeId: string,
+  history: ChatTurn[],
+): Promise<{ error: string } | { answer: string; tweak: string | null }> {
+  const { settings } = await requireActingMember();
+  if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown recipe." };
+  const turns = history
+    .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
+    .slice(-8)
+    .map((t) => ({ role: t.role, content: t.content.slice(0, 1500) }));
+  if (!turns.length || turns[turns.length - 1].role !== "user") return { error: "Ask a question first." };
+
+  const recipe = await getRecipe(db, { id: recipeId });
+  if (!recipe) return { error: "That recipe is gone." };
+  try {
+    const today = todayIn(settings.timezone);
+    const [brief, meals, eaterContext, sides] = await Promise.all([
+      loadFamilyBrief(db),
+      loadMeals(db, today, today),
+      loadEaterContext(db, today, today),
+      listRecipes(db, { kind: "side" }),
+    ]);
+    const tonight = meals.get(today);
+    const onTonight = tonight?.nightType === "cook" && (tonight.recipeId === recipe.id || tonight.sideRecipeIds.includes(recipe.id));
+    const titles = new Map(sides.map((s) => [s.id, s.title]));
+    return await askAboutRecipe(
+      recipe,
+      {
+        servings: onTonight && tonight ? servingsFor(tonight, eatersFor(eaterContext, today, tonight.eaterIds).length) : recipe.baseServings,
+        tonight: Boolean(onTonight),
+        sidesTonight: onTonight && tonight ? tonight.sideRecipeIds.map((id) => titles.get(id)).filter((t): t is string => Boolean(t)) : [],
+        availableSides: sides.map((s) => s.title).slice(0, 30),
+      },
+      brief,
+      turns,
+    );
+  } catch (error) {
+    console.error("Recipe question failed", error);
+    return { error: friendlyAiError(error) };
+  }
 }
