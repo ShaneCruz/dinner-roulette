@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Avatar, Button, Card, cx, inputClass } from "@/components/ui";
 import { Wheel } from "@/components/wheel";
-import type { RestaurantDish, RestaurantFavorites, RestaurantFeeling, RestaurantPick } from "@/db/schema";
+import type { RestaurantDish, RestaurantFavorites, RestaurantFeeling, RestaurantPick, SharedItem } from "@/db/schema";
 import {
   chooserOptions,
   findDish,
@@ -11,6 +11,7 @@ import {
   FEELINGS,
   orderText,
   orderTotal,
+  sharedItems,
   usualOrder,
   type ChooserTraits,
 } from "@/lib/restaurants/favorites";
@@ -161,7 +162,7 @@ export function UsualOrder({
               <OrderLine key={l.dish} dish={l.dish} count={l.count} who={l.who.join(", ")} research={research} />
             ))}
             {order.shared.map((s) => (
-              <OrderLine key={s} dish={s} count={1} who="to share" research={research} />
+              <OrderLine key={s.dish} dish={s.dish} count={s.count} who="to share" research={research} />
             ))}
           </ul>
           {total ? (
@@ -355,6 +356,77 @@ function DishList({
   );
 }
 
+/**
+ * Table items, with how many of each. "One each" is the common case — a muffin
+ * per person — and it follows whoever's eating rather than freezing a number.
+ */
+function SharedList({ items, onChange }: { items: SharedItem[]; onChange: (items: SharedItem[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const dish = draft.trim();
+    if (dish && !items.some((i) => i.dish.toLowerCase() === dish.toLowerCase())) onChange([...items, { dish, qty: 1 }]);
+    setDraft("");
+  };
+  const setQty = (dish: string, qty: SharedItem["qty"]) =>
+    onChange(items.map((i) => (i.dish === dish ? { ...i, qty } : i)));
+
+  return (
+    <div className="space-y-2">
+      {items.length ? (
+        <ul className="space-y-1.5">
+          {items.map((item) => (
+            <li key={item.dish} className="flex items-center gap-2 rounded-2xl bg-surface-muted py-1 pl-3 pr-1 text-sm">
+              <span className="flex-1 truncate">{item.dish}</span>
+              <select
+                className="rounded-full border border-border bg-surface px-2 py-1 text-sm font-semibold"
+                aria-label={`How many ${item.dish}`}
+                value={String(item.qty)}
+                onChange={(e) => setQty(item.dish, e.target.value === "each" ? "each" : Number(e.target.value))}
+              >
+                <option value="each">1 each</option>
+                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => (
+                  <option key={n} value={n}>
+                    {n}×
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                aria-label={`Remove ${item.dish}`}
+                onClick={() => onChange(items.filter((i) => i.dish !== item.dish))}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="flex gap-2">
+        <input
+          className={inputClass}
+          value={draft}
+          list="menu-dishes"
+          placeholder="Mac and cheese, gyoza, edamame…"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button type="button" variant="secondary" onClick={add} disabled={!draft.trim()}>
+          Add
+        </Button>
+      </div>
+      <p className="text-xs text-muted">
+        &ldquo;1 each&rdquo; orders one per person eating, so it shrinks when someone&apos;s away.
+      </p>
+    </div>
+  );
+}
+
 function FavoritesEditor({
   restaurantId,
   people,
@@ -438,9 +510,8 @@ function FavoritesEditor({
       {isParent ? (
         <div className="space-y-2 border-t border-border pt-4">
           <p className="font-bold">🍽️ For the table</p>
-          <DishList
-            dishes={draft.shared}
-            placeholder="Mac and cheese, gyoza, edamame…"
+          <SharedList
+            items={sharedItems(draft)}
             onChange={(shared) => setDraft((d) => ({ ...d, shared }))}
           />
         </div>

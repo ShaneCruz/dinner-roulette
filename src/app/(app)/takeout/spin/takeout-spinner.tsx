@@ -20,7 +20,11 @@ type Place = {
   weight: number;
   meh: string[];
   loves: string[];
-  usual: { lines: { dish: string; count: number; who: string[] }[]; shared: string[]; missing: string[] } | null;
+  usual: {
+    lines: { dish: string; count: number; who: string[] }[];
+    shared: { dish: string; count: number }[];
+    missing: string[];
+  } | null;
 };
 type Member = { id: string; name: string; emoji: string; color: string };
 
@@ -115,8 +119,9 @@ export function TakeoutSpinner({
                   </li>
                 ))}
                 {winner.usual.shared.map((s) => (
-                  <li key={s}>
-                    {s} <span className="text-muted">(to share)</span>
+                  <li key={s.dish}>
+                    {s.count > 1 ? `${s.count}× ` : ""}
+                    {s.dish} <span className="text-muted">(to share)</span>
                   </li>
                 ))}
               </ul>

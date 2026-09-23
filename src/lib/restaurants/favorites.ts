@@ -1,4 +1,4 @@
-import type { RestaurantDish, RestaurantFavorites, RestaurantFeeling, RestaurantPick } from "@/db/schema";
+import type { RestaurantDish, RestaurantFavorites, RestaurantFeeling, RestaurantPick, SharedItem } from "@/db/schema";
 
 /**
  * The family's usual takeout order. Pure helpers so the page, the wheel and
@@ -13,6 +13,13 @@ export const FEELINGS: Record<RestaurantFeeling, { emoji: string; label: string 
 
 export const EMPTY_FAVORITES: RestaurantFavorites = { people: {}, shared: [] };
 
+/** Table items, however they were saved: a bare name counts as one. */
+export function sharedItems(favorites: RestaurantFavorites | null): SharedItem[] {
+  return (favorites?.shared ?? []).map((item) =>
+    typeof item === "string" ? { dish: item, qty: 1 } : { dish: item.dish, qty: item.qty },
+  );
+}
+
 export function cleanFavorites(input: RestaurantFavorites): RestaurantFavorites {
   const clean = (dishes: string[]) => {
     const seen = new Set<string>();
@@ -26,7 +33,14 @@ export function cleanFavorites(input: RestaurantFavorites): RestaurantFavorites 
     const dishes = clean(entry.dishes);
     if (dishes.length || entry.feeling) people[id] = { dishes, feeling: entry.feeling ?? null };
   }
-  return { people, shared: clean(input.shared).slice(0, 20) };
+  const items = sharedItems(input);
+  const names = clean(items.map((i) => i.dish));
+  const shared = names.map((dish) => {
+    const found = items.find((i) => i.dish.trim().toLowerCase() === dish.toLowerCase());
+    const qty = found?.qty === "each" ? ("each" as const) : Math.min(Math.max(Math.round(Number(found?.qty) || 1), 1), 20);
+    return { dish, qty };
+  });
+  return { people, shared: shared.slice(0, 20) };
 }
 
 export type OrderLine = { dish: string; count: number; who: string[] };
@@ -39,7 +53,7 @@ export function usualOrder(
   favorites: RestaurantFavorites | null,
   people: { id: string; name: string }[],
   choices: Record<string, string> = {},
-): { lines: OrderLine[]; shared: string[]; missing: string[] } {
+): { lines: OrderLine[]; shared: { dish: string; count: number }[]; missing: string[] } {
   const lines: OrderLine[] = [];
   const missing: string[] = [];
   for (const person of people) {
@@ -54,13 +68,19 @@ export function usualOrder(
       line.who.push(person.name);
     } else lines.push({ dish, count: 1, who: [person.name] });
   }
-  return { lines, shared: favorites?.shared ?? [], missing };
+  // "One each" follows whoever's eating tonight, so a night without the kids
+  // doesn't order five muffins.
+  const shared = sharedItems(favorites).map((item) => ({
+    dish: item.dish,
+    count: item.qty === "each" ? people.length : item.qty,
+  }));
+  return { lines, shared: shared.filter((s) => s.count > 0), missing };
 }
 
 export function orderText(order: ReturnType<typeof usualOrder>, restaurantName: string): string {
   const rows = [
     ...order.lines.map((l) => `${l.count > 1 ? `${l.count}× ` : ""}${l.dish} (${l.who.join(", ")})`),
-    ...order.shared.map((s) => `${s} (to share)`),
+    ...order.shared.map((s) => `${s.count > 1 ? `${s.count}× ` : ""}${s.dish} (to share)`),
   ];
   return `${restaurantName} order:\n${rows.map((r) => `• ${r}`).join("\n")}`;
 }
@@ -207,7 +227,7 @@ export function priceOf(text: string | null | undefined): number | null {
 
 /** Roughly what the order comes to, when the menu gives prices. */
 export function orderTotal(
-  order: { lines: OrderLine[]; shared: string[] },
+  order: { lines: OrderLine[]; shared: { dish: string; count: number }[] },
   dishes: { name: string; price: string | null }[],
 ): number | null {
   if (!dishes.length) return null;
@@ -219,10 +239,10 @@ export function orderTotal(
     total += price * line.count;
     priced++;
   }
-  for (const dish of order.shared) {
-    const price = priceOf(findDish(dish, dishes)?.price);
+  for (const item of order.shared) {
+    const price = priceOf(findDish(item.dish, dishes)?.price);
     if (price === null) continue;
-    total += price;
+    total += price * item.count;
     priced++;
   }
   return priced ? total : null;

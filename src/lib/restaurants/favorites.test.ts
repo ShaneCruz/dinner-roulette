@@ -19,7 +19,7 @@ const cluckers = cleanFavorites({
     k3: { dishes: ["Kids Drumsticks meal with fries", "Kids Tenders"], feeling: null },
     p2: { dishes: [], feeling: "meh" },
   },
-  shared: ["Mac and cheese", "Mother Hen", "Mac and Cheese", "  "],
+  shared: ["Mac and cheese", "Mother Hen", "Mac and Cheese", "  ", { dish: "Mini muffins", qty: "each" }],
 });
 
 describe("usual order", () => {
@@ -28,9 +28,37 @@ describe("usual order", () => {
     expect(order.lines).toEqual([
       { dish: "Kids Drumsticks meal with fries", count: 3, who: ["Kaela", "Alexa", "Brayden"] },
     ]);
-    expect(order.shared).toEqual(["Mac and cheese", "Mother Hen"]);
+    expect(order.shared).toEqual([
+      { dish: "Mac and cheese", count: 1 },
+      { dish: "Mother Hen", count: 1 },
+      { dish: "Mini muffins", count: 5 },
+    ]);
     expect(order.missing).toEqual(["Shane", "Jamie"]);
     expect(orderText(order, "Cluckers")).toContain("• 3× Kids Drumsticks meal with fries (Kaela, Alexa, Brayden)");
+    expect(orderText(order, "Cluckers")).toContain("• 5× Mini muffins (to share)");
+    expect(orderText(order, "Cluckers")).toContain("• Mother Hen (to share)");
+  });
+
+  it("orders one each per person actually eating", () => {
+    expect(usualOrder(cluckers, kids).shared).toContainEqual({ dish: "Mini muffins", count: 3 });
+    expect(usualOrder(cluckers, []).shared).not.toContainEqual(expect.objectContaining({ dish: "Mini muffins" }));
+  });
+
+  it("keeps a plain name as one, and holds a count steady", () => {
+    const saved = cleanFavorites({
+      people: {},
+      shared: ["Garlic bread", { dish: "Edamame", qty: 2 }, { dish: "Muffin", qty: "each" }],
+    });
+    expect(saved.shared).toEqual([
+      { dish: "Garlic bread", qty: 1 },
+      { dish: "Edamame", qty: 2 },
+      { dish: "Muffin", qty: "each" },
+    ]);
+    expect(usualOrder(saved, kids).shared).toEqual([
+      { dish: "Garlic bread", count: 1 },
+      { dish: "Edamame", count: 2 },
+      { dish: "Muffin", count: 3 },
+    ]);
   });
 
   it("uses tonight's choice over the usual", () => {
@@ -149,10 +177,10 @@ describe("what the order costs", () => {
         { dish: "Joe Burger", count: 1, who: ["Shane"] },
         { dish: "Greek Chicken Salad", count: 1, who: ["Jamie"] },
       ],
-      shared: ["Cheese curds"],
+      shared: [{ dish: "Cheese curds", count: 2 }],
     };
-    // 2 x 8.99 + 16 + 11.50, and the unpriced salad is left out
-    expect(orderTotal(order, dishes)).toBeCloseTo(45.48);
+    // 2 x 8.99 + 16 + 2 x 11.50, and the unpriced salad is left out
+    expect(orderTotal(order, dishes)).toBeCloseTo(56.98);
     expect(orderTotal({ lines: [], shared: [] }, [])).toBeNull();
   });
 });
