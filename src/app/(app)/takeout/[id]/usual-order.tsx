@@ -201,10 +201,20 @@ export function UsualOrder({
 
 /** What a dish actually is, from the menu lookup. */
 function DishNote({ name, research }: { name: string; research: { dishes: RestaurantDish[] } | null }) {
-  const dish = research ? findDish(name, research.dishes) : undefined;
-  if (!dish || (!dish.description && !dish.price)) return null;
+  if (!research?.dishes.length) return null;
+  const dish = findDish(name, research.dishes);
+  if (!dish) {
+    // Either it's not on the menu any more, or we call it something different.
+    return (
+      <span className="w-full text-xs text-muted">
+        Not on the menu we found. Rename it to match, or refresh the menu.
+      </span>
+    );
+  }
+  if (!dish.description && !dish.price) return null;
   return (
     <span className="w-full text-xs text-muted">
+      {dish.name.toLowerCase() !== name.toLowerCase() ? <span className="font-semibold">{dish.name} · </span> : null}
       {dish.price ? <span className="font-semibold">{dish.price} · </span> : null}
       {dish.description}
     </span>
