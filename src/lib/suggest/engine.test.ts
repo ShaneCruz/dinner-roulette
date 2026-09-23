@@ -7,6 +7,7 @@ import {
   scoreRecipe,
   season,
   seededRandom,
+  strangersBoost,
   suggestWeek,
   type EngineContext,
   type EngineMember,
@@ -283,5 +284,42 @@ describe("suggestWeek", () => {
     const first = suggestWeek([night()], context(), [], { random: seededRandom(1) })[0];
     const again = suggestWeek([night()], context(), [], { random: seededRandom(1), avoid: { [first.date]: first.recipeId } })[0];
     expect(again.recipeId).not.toBe(first.recipeId);
+  });
+});
+
+describe("ratings from the site a recipe came from", () => {
+  it("counts well-reviewed recipes a little, badly-reviewed ones against", () => {
+    expect(strangersBoost({ rating: 4.8, count: 19542 })).toBeCloseTo(0.5);
+    expect(strangersBoost({ rating: 4.6, count: 300 })).toBeCloseTo(0.35);
+    expect(strangersBoost({ rating: 4.3, count: 60 })).toBeCloseTo(0.1);
+    expect(strangersBoost({ rating: 3.5, count: 2000 })).toBeCloseTo(-0.4);
+    expect(strangersBoost({ rating: 4.0, count: 5000 })).toBe(0);
+  });
+
+  it("ignores ratings from a handful of people, or none at all", () => {
+    expect(strangersBoost({ rating: 5, count: 3 })).toBe(0);
+    expect(strangersBoost({ rating: null, count: 900 })).toBe(0);
+    expect(strangersBoost(null)).toBe(0);
+  });
+
+  it("nudges an unrated dinner up the list, but yields to the family's own rating", () => {
+    const liked = toEngine("taco-night");
+    const stranger = { ...toEngine("baked-mostaccioli"), sourceRating: { rating: 4.9, count: 12000 } };
+    const context: EngineContext = { members: family, recipes: [liked, stranger], settings };
+    const night: EngineNight = { date: "2026-10-13", eaterIds: everyone, budget: "weekend" };
+
+    const plain = scoreRecipe(toEngine("baked-mostaccioli"), night, context, []);
+    const boosted = scoreRecipe(stranger, night, context, []);
+    expect(boosted.score).toBeGreaterThan(plain.score);
+    expect(boosted.reasons.join(" ")).toContain("4.9★ from 12k cooks");
+
+    // Once someone here has rated it, the strangers stop counting.
+    const rated: EngineContext = {
+      ...context,
+      members: family.map((m) => ({ ...m, ratings: { [stranger.id]: 3 } })),
+    };
+    const withOurRating = scoreRecipe(stranger, night, rated, []);
+    const plainWithOurRating = scoreRecipe(toEngine("baked-mostaccioli"), night, rated, []);
+    expect(withOurRating.score).toBeCloseTo(plainWithOurRating.score);
   });
 });
