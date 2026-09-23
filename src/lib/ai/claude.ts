@@ -27,10 +27,11 @@ export const RESEARCH_MODEL = "claude-sonnet-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 /**
- * "smart" (Opus) reads photos, PDFs and handwriting and does research;
- * "fast" (Haiku, about a tenth of the cost) does everything simpler.
+ * "smart" (Opus) reads photos, PDFs and handwriting; "balanced" (Sonnet)
+ * handles tidy text at about half the price; "fast" (Haiku, about a tenth
+ * of Opus) does everything simpler.
  */
-export type Tier = "smart" | "fast";
+export type Tier = "smart" | "balanced" | "fast";
 
 export class AiUnavailableError extends Error {
   constructor() {
@@ -66,7 +67,7 @@ export async function structured<T extends z.ZodType>(options: {
   const client = getClient();
   await checkBudget();
   const fast = options.tier === "fast";
-  const model = fast ? FAST_MODEL : MODEL;
+  const model = fast ? FAST_MODEL : options.tier === "balanced" ? RESEARCH_MODEL : MODEL;
   const format = zodOutputFormat(options.schema);
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: options.content }];
   // Haiku doesn't take adaptive thinking, effort, or refusal fallbacks.
@@ -81,8 +82,7 @@ export async function structured<T extends z.ZodType>(options: {
     : await client.beta.messages.parse({
         model,
         max_tokens: options.maxTokens ?? 16000,
-        betas: [FALLBACK_BETA],
-        fallbacks: "default",
+        ...(options.tier === "balanced" ? {} : { betas: [FALLBACK_BETA], fallbacks: "default" as const }),
         thinking: { type: "adaptive" },
         output_config: { effort: options.effort ?? "medium", format },
         system: options.system,
@@ -134,6 +134,12 @@ export async function research(options: {
   effort?: "low" | "medium" | "high";
   /** Stop and use what we have once the call has cost this much (cents) */
   costCapCents?: number;
+  /**
+   * Let Claude open whole pages. Off by default: a fetched page lands in the
+   * prompt in full, which is where research bills run into dollars. Search
+   * results carry enough for most questions.
+   */
+  readPages?: boolean;
 }): Promise<{ text: string; sources: { title: string; url: string }[] }> {
   const client = getClient();
   const cap = options.costCapCents ?? 40;
@@ -153,10 +159,12 @@ export async function research(options: {
       output_config: { effort: options.effort ?? "low" },
       system: options.system,
       messages,
-      tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 2 },
-      ],
+      tools: options.readPages
+        ? [
+            { type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 },
+            { type: "web_fetch_20260209", name: "web_fetch", max_uses: 1 },
+          ]
+        : [{ type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 }],
     });
 
     await recordUsage(options.feature, RESEARCH_MODEL, response.usage);
