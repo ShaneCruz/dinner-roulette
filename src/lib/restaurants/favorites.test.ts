@@ -111,6 +111,17 @@ describe("matching what we call a dish to the menu", () => {
     expect(sameDish("Avocado Roll", "Spicy Tuna Roll")).toBe(false);
   });
 
+  // Taken off Clucker's real ordering menu, where the same dish appears as a
+  // side, a kids' portion and a catering pan.
+  it("handles the names a real menu actually uses", () => {
+    expect(sameDish("Mac & Cheese", "Mac N Cheese")).toBe(true);
+    expect(sameDish("Mac & Cheese", "Kids Mac+Cheese No Chicken")).toBe(false);
+    expect(sameDish("The Mother Hen", "Mother Hen")).toBe(true);
+    expect(sameDish("Mini Muffin", "Mini muffins")).toBe(true);
+    expect(sameDish("Mini Muffin", "Homemade Cornbread Muffin (1)")).toBe(false);
+    expect(sameDish("Kids Drum Sticks", "Kid’s Drumsticks")).toBe(true);
+  });
+
   it("finds the menu entry, exact first", () => {
     const dishes = [{ name: "Chicken Quesadilla" }, { name: "Kid's Quesadilla" }];
     expect(findDish("Kids Quesadilla", dishes)?.name).toBe("Kid's Quesadilla");
