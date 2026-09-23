@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import { AiBudgetError } from "./errors";
-import { checkBudget, recordUsage } from "./usage";
+import { checkBudget, costCents, recordUsage } from "./usage";
 
 export { AiBudgetError };
 
@@ -22,6 +22,8 @@ export { AiBudgetError };
 export const MODEL = "claude-opus-5";
 /** Cheap and quick; plenty for estimates, suggestions and simple recipes. */
 export const FAST_MODEL = "claude-haiku-4-5";
+/** Web research: capable enough to read menus, much cheaper than Opus. */
+export const RESEARCH_MODEL = "claude-sonnet-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 /**
@@ -130,30 +132,36 @@ export async function research(options: {
   prompt: string;
   maxSearches?: number;
   effort?: "low" | "medium" | "high";
+  /** Stop and use what we have once the call has cost this much (cents) */
+  costCapCents?: number;
 }): Promise<{ text: string; sources: { title: string; url: string }[] }> {
+  const client = getClient();
+  const cap = options.costCapCents ?? 40;
+  await checkBudget(cap);
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: options.prompt }];
   const sources = new Map<string, string>();
+  let spent = 0;
   let text = "";
 
-  const client = getClient();
-  await checkBudget();
-  for (let round = 0; round < 4; round++) {
+  // Each extra round re-sends every page Claude has read, so rounds are the
+  // expensive part: two is enough for a menu, and the cost cap is the backstop.
+  for (let round = 0; round < 2; round++) {
     const response = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      model: RESEARCH_MODEL,
+      max_tokens: 8000,
       thinking: { type: "adaptive" },
-      output_config: { effort: options.effort ?? "medium" },
+      output_config: { effort: options.effort ?? "low" },
       system: options.system,
       messages,
       tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 6 },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 6 },
+        { type: "web_search_20260209", name: "web_search", max_uses: options.maxSearches ?? 3 },
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 2 },
       ],
     });
 
-    await recordUsage(options.feature, MODEL, response.usage);
+    await recordUsage(options.feature, RESEARCH_MODEL, response.usage);
+    spent += costCents(RESEARCH_MODEL, response.usage);
+
     for (const block of response.content) {
       if (block.type === "text") {
         text += block.text;
@@ -169,7 +177,7 @@ export async function research(options: {
     }
 
     if (response.stop_reason === "refusal") throw new AiFailedError("Claude couldn't research that one.");
-    if (response.stop_reason !== "pause_turn") break;
+    if (response.stop_reason !== "pause_turn" || spent >= cap) break;
     messages.push({ role: "assistant", content: response.content });
     text = "";
   }

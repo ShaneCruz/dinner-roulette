@@ -18,6 +18,7 @@ import { AiBudgetError } from "./errors";
 const PRICES: Record<string, { input: number; output: number }> = {
   "claude-opus-5": { input: 5, output: 25 },
   "claude-haiku-4-5": { input: 1, output: 5 },
+  "claude-sonnet-5": { input: 3, output: 15 },
 };
 const WEB_SEARCH_CENTS = 1; // $10 per 1,000 searches
 const BACKGROUND_SHARE = 0.8;
@@ -71,12 +72,16 @@ export async function weekSpending() {
   return { weekStart, budgetCents: budget, spentCents: spent, byFeature: rows.sort((a, b) => b.cents - a.cents) };
 }
 
-/** Throws AiBudgetError when this call would go over the week's budget. */
-export async function checkBudget(): Promise<void> {
+/**
+ * Throws AiBudgetError when this call would go over the week's budget.
+ * `needCents` is what the call could cost, so an expensive job (a menu
+ * lookup) doesn't start on the last few cents of the week.
+ */
+export async function checkBudget(needCents = 0): Promise<void> {
   const { budgetCents, spentCents } = await weekSpending();
   if (budgetCents <= 0) throw new AiBudgetError("AI features are turned off in Settings.");
   const limit = background.getStore() ? budgetCents * BACKGROUND_SHARE : budgetCents;
-  if (spentCents >= limit) {
+  if (spentCents + needCents >= limit) {
     throw new AiBudgetError(
       `This week's AI budget ($${(budgetCents / 100).toFixed(2)}) is used up. It resets at the start of next week, or a parent can raise it in Settings.`,
     );

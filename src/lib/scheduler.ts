@@ -7,6 +7,7 @@ import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { addDays, todayIn } from "@/lib/presence";
 import { finishStuckIdeas } from "@/lib/recipes/ideas";
 import { scanForProposals } from "@/lib/recipes/proposals";
+import { finishStuckResearch } from "@/lib/restaurants/store";
 import { dueReminders, minutesIn, type ReminderMeal } from "@/lib/reminders";
 import { runAutopilot } from "@/lib/suggest/autopilot";
 import { sendOnce, sendToMembers } from "./push";
@@ -119,6 +120,7 @@ export async function runScheduledJobs(db: Database, now = new Date()) {
   });
 
   await job("ideas", () => finishStuckIdeas(db, now));
+  await job("menus", () => finishStuckResearch(db, now));
   await job("nutrition", () => backfillNutrition(db, 10));
   return report;
 }
