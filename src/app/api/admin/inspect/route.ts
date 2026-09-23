@@ -1,25 +1,18 @@
-import { timingSafeEqual } from "node:crypto";
 import { desc, ilike } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { recipe, restaurant } from "@/db/schema";
 import { usualDishes } from "@/lib/restaurants/store";
 import { sameDish } from "@/lib/restaurants/favorites";
+import { adminRequest } from "@/lib/admin-auth";
 
 /**
  * A read-only window into the family's data for debugging: what's saved
  * against what the menu lookup found, and whether the two line up. Behind
  * the scheduler secret, and it never writes anything.
  */
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  const given = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!secret || given.length !== secret.length) return false;
-  return timingSafeEqual(Buffer.from(given), Buffer.from(secret));
-}
-
 export async function GET(request: Request) {
-  if (!authorized(request)) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  if (!adminRequest(request)) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const url = new URL(request.url);
   const name = url.searchParams.get("restaurant");
   const recipeSlug = url.searchParams.get("recipe");
@@ -31,7 +24,9 @@ export async function GET(request: Request) {
         const dishes = place.research?.dishes ?? [];
         const usuals = usualDishes(place.favorites);
         return {
+          id: place.id,
           name: place.name,
+          menuFrom: place.research?.menuFrom ?? null,
           cuisine: place.cuisine,
           website: place.website,
           researchedAt: place.researchedAt,
@@ -64,6 +59,9 @@ export async function GET(request: Request) {
     });
   }
 
-  const places = await db.select({ name: restaurant.name }).from(restaurant).orderBy(desc(restaurant.createdAt));
-  return NextResponse.json({ restaurants: places.map((p) => p.name), hint: "?restaurant=<name> or ?recipe=<slug>" });
+  const places = await db
+    .select({ id: restaurant.id, name: restaurant.name })
+    .from(restaurant)
+    .orderBy(desc(restaurant.createdAt));
+  return NextResponse.json({ restaurants: places, hint: "?restaurant=<name> or ?recipe=<slug>" });
 }
