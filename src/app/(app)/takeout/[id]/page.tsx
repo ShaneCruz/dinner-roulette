@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Avatar, Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
+import { Avatar, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { aiEnabled } from "@/lib/ai/claude";
 import { sameDish } from "@/lib/restaurants/favorites";
@@ -11,6 +11,8 @@ import { eatersFor, loadEaterContext, loadMeals } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
 import { RestaurantTools } from "./restaurant-tools";
 import { UsualOrder } from "./usual-order";
+import { MenuChat } from "./menu-chat";
+import { MenuList } from "./menu-list";
 
 export async function generateMetadata({ params }: PageProps<"/takeout/[id]">) {
   const { id } = await params;
@@ -18,16 +20,6 @@ export async function generateMetadata({ params }: PageProps<"/takeout/[id]">) {
   return { title: found?.name ?? "Restaurant" };
 }
 
-const TAG_LABELS: Record<string, string> = {
-  mild: "Mild",
-  spicy: "🌶️ Spicy",
-  kid_friendly: "Kid friendly",
-  high_protein: "High protein",
-  lighter: "Lighter",
-  vegetarian: "Vegetarian",
-  contains_beef: "Beef",
-  shareable: "Shareable",
-};
 
 export default async function RestaurantPage({ params, searchParams }: PageProps<"/takeout/[id]">) {
   const { acting, settings } = await requireActingMember();
@@ -152,9 +144,11 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
             ) : null}
           </Card>
 
+          <MenuChat restaurantId={place.id} restaurantName={place.name} />
+
           <Card>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-xl font-bold">Menu highlights</h2>
+              <h2 className="text-xl font-bold">The menu</h2>
               {research.menuFrom === "family" ? (
                 <span className="text-sm font-semibold text-basil">✓ From their menu</span>
               ) : (
@@ -164,31 +158,7 @@ export default async function RestaurantPage({ params, searchParams }: PageProps
               )}
             </div>
             {ourDishes.length ? <p className="text-sm text-muted">⭐ marks what you usually order.</p> : null}
-            <ul className="mt-3 divide-y divide-border">
-              {[...research.dishes]
-                .sort((a, b) => Number(isUsual(b.name)) - Number(isUsual(a.name)))
-                .map((dish) => (
-                <li key={dish.name} className="py-2.5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold">
-                      {isUsual(dish.name) ? "⭐ " : ""}
-                      {dish.name}
-                    </span>
-                    {dish.price ? <span className="max-w-[45%] text-right text-sm text-muted">{dish.price}</span> : null}
-                  </div>
-                  {dish.description ? <p className="text-sm text-muted">{dish.description}</p> : null}
-                  {dish.tags.length ? (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {dish.tags.map((tag) => (
-                        <Badge key={tag} tone={tag === "spicy" ? "tomato" : tag === "mild" || tag === "kid_friendly" ? "basil" : "neutral"}>
-                          {TAG_LABELS[tag] ?? tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <MenuList dishes={research.dishes} usuals={research.dishes.filter((d) => isUsual(d.name)).map((d) => d.name)} />
             {research.sources.length ? (
               <p className="mt-4 text-xs text-muted">
                 Sources:{" "}

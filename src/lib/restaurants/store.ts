@@ -133,7 +133,7 @@ export function menuFromFamily(
   const given = new Set(incoming.dishes.map((d) => d.name.toLowerCase()));
   const kept =
     previous?.menuFrom === "family" ? previous.dishes.filter((d) => !given.has(d.name.toLowerCase())) : [];
-  return { ...incoming, menuFrom: "family", dishes: [...incoming.dishes, ...kept].slice(0, 40) };
+  return { ...incoming, menuFrom: "family", dishes: [...incoming.dishes, ...kept].slice(0, 120) };
 }
 
 /** Every dish the family has saved as a usual at this place. */
