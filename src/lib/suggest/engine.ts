@@ -126,7 +126,7 @@ export type Scored = {
 // Things nearly every dinner uses; sharing them doesn't simplify shopping.
 const STAPLE_ENDINGS = ["salt", "black pepper", "oil", "butter", "garlic", "sugar", "flour", "water"];
 
-function isStapleIngredient(name: string) {
+export function isStapleIngredient(name: string) {
   return STAPLE_ENDINGS.some((w) => name === w || name.endsWith(` ${w}`));
 }
 

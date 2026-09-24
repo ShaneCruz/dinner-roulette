@@ -243,11 +243,15 @@ export default async function HomePage() {
               <>
                 <h2 className="mt-1 text-2xl font-bold">No plan yet</h2>
                 <p className="mt-1 text-muted">
-                  Pick something,{" "}
+                  Short on time?{" "}
+                  <Link href="/quick" className="font-semibold text-tomato underline">
+                    Something fast tonight
+                  </Link>{" "}
+                  ranks dinners by how little you&apos;d have to buy. Or{" "}
                   <Link href={`/plan/spin?date=${today}`} className="font-semibold text-tomato underline">
                     spin the dinner wheel
-                  </Link>
-                  , or{" "}
+                  </Link>{" "}
+                  or{" "}
                   <Link href={`/takeout/spin?date=${today}`} className="font-semibold text-tomato underline">
                     spin for takeout
                   </Link>
