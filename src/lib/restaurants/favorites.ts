@@ -217,7 +217,13 @@ export function sameDish(a: string, b: string): boolean {
 
 /** The menu entry for a dish the family named, if there is one. */
 export function findDish<T extends { name: string }>(name: string, dishes: T[]): T | undefined {
-  return dishes.find((d) => d.name.toLowerCase() === name.toLowerCase()) ?? dishes.find((d) => sameDish(d.name, name));
+  const exact = dishes.filter((d) => d.name.toLowerCase() === name.toLowerCase());
+  const close = dishes.filter((d) => sameDish(d.name, name));
+  // Two entries can describe the same dish — a menu lists "Kung Pao" while we
+  // once saved "Kung Pao (Chicken)". A price means the entry came off the menu
+  // rather than out of our own notes, so it wins even over the exact name.
+  const priced = (list: T[]) => list.find((d) => Boolean((d as { price?: string | null }).price));
+  return priced(exact) ?? priced(close) ?? exact[0] ?? close[0];
 }
 
 /** "$8.99" → 8.99; "$14-22" → 14; anything else → null. */

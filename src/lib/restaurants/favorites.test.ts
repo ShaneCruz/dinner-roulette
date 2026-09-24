@@ -160,6 +160,15 @@ describe("matching what we call a dish to the menu", () => {
     expect(findDish("Chicken Quesadilla", dishes)?.name).toBe("Chicken Quesadilla");
     expect(findDish("Nachos", dishes)).toBeUndefined();
   });
+
+  it("prefers the entry that has a price", () => {
+    const dishes = [
+      { name: "Kung Pao (Chicken)", price: null },
+      { name: "Kung Pao", price: "$12.00+" },
+    ];
+    expect(findDish("Kung Pao (Chicken)", dishes)?.price).toBe("$12.00+");
+    expect(findDish("Kung Pao", dishes)?.price).toBe("$12.00+");
+  });
 });
 
 describe("what the order costs", () => {
