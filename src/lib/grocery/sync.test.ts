@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GrocerySnapshot } from "./store";
-import { applyOp, neededBetween } from "./sync";
+import { applyOp, neededBetween, nightsStillAhead } from "./sync";
 
 const snapshot: GrocerySnapshot = {
   items: [
@@ -74,5 +74,24 @@ describe("what still needs buying", () => {
 
   it("always keeps what you added yourself", () => {
     expect(neededBetween(item(), today, friday)).toBe(true);
+  });
+});
+
+describe("nights a dinner still needs shopping for", () => {
+  const item = (...dates: string[]) => ({ sources: dates.map((date) => ({ date })) });
+  const today = "2026-09-23";
+
+  it("leaves out nights already behind us", () => {
+    expect(nightsStillAhead(item("2026-09-21", "2026-09-25"), today)).toEqual(["2026-09-25"]);
+  });
+
+  it("leaves out a dinner cooked early", () => {
+    // Friday's chicken, made on a free Thursday: nothing left to buy for it.
+    expect(nightsStillAhead(item("2026-09-25"), today, ["2026-09-25"])).toEqual([]);
+    expect(nightsStillAhead(item("2026-09-25"), today, [])).toEqual(["2026-09-25"]);
+  });
+
+  it("keeps a night that's cooked for one dinner and still to come for another", () => {
+    expect(nightsStillAhead(item("2026-09-24", "2026-09-25"), today, ["2026-09-24"])).toEqual(["2026-09-25"]);
   });
 });

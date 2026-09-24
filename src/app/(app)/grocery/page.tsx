@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { grocerySnapshot } from "@/lib/grocery/store";
-import { findWeekPlan } from "@/lib/plan/store";
+import { findWeekPlan, loadMeals } from "@/lib/plan/store";
 import { formatDay, weekDates, weekStartFor } from "@/lib/plan/week";
 import { addDays, todayIn } from "@/lib/presence";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
@@ -18,8 +18,15 @@ export default async function GroceryPage({ searchParams }: PageProps<"/grocery"
   const anchor = typeof requested === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today;
   const weekStart = weekStartFor(anchor, settings.weekStartsOn);
   const dates = weekDates(weekStart);
-  const [plan, members] = await Promise.all([findWeekPlan(db, weekStart), getActiveMembers()]);
+  const [plan, members, meals] = await Promise.all([
+    findWeekPlan(db, weekStart),
+    getActiveMembers(),
+    loadMeals(db, dates[0], dates[6]),
+  ]);
   const snapshot = plan ? await grocerySnapshot(db, plan.id) : null;
+  // A dinner that's been cooked needs no more shopping, even if its night
+  // hasn't arrived — someone cooked Friday's chicken on a free Thursday.
+  const cookedDates = [...meals.values()].filter((m) => m.status === "cooked").map((m) => m.date);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -53,6 +60,7 @@ export default async function GroceryPage({ searchParams }: PageProps<"/grocery"
           actingId={acting.id}
           today={todayIn(settings.timezone)}
           dates={dates}
+          cookedDates={cookedDates}
           members={members.map((m) => ({ id: m.id, name: m.name, emoji: m.avatarEmoji, color: m.avatarColor }))}
         />
       ) : (

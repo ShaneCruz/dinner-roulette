@@ -184,6 +184,19 @@ export function neededBy(item: { sources: { date: string }[] }): string | null {
 }
 
 /**
+ * The nights this item is still wanted for: ones that haven't happened and
+ * haven't been cooked. A dinner already made needs no more shopping, whether
+ * its night has passed or someone cooked it early.
+ */
+export function nightsStillAhead(
+  item: { sources: { date: string }[] },
+  today: string,
+  cookedDates: string[] = [],
+): string[] {
+  return item.sources.map((s) => s.date).filter((date) => date >= today && !cookedDates.includes(date));
+}
+
+/**
  * Is this needed for a dinner between these nights? Asked of every night the
  * item belongs to, not just the first: an onion bought for Monday's chili and
  * Friday's roast still needs buying on Thursday, while one bought only for a
