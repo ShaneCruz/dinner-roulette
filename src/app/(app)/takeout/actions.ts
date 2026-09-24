@@ -81,6 +81,8 @@ const favoritesSchema = z.object({
       ]),
     )
     .max(30),
+  /** How they order a dish here, keyed by dish name: sauce, sides, half-and-half */
+  notes: z.record(z.string().max(120), z.string().max(200)).optional(),
 });
 
 /**
@@ -104,7 +106,8 @@ export async function saveFavorites(
     const people = { ...current.people };
     if (mine) people[acting.id] = mine;
     else delete people[acting.id];
-    next = { people, shared: current.shared };
+    // A kid edits their own dishes; the table items and everyone's notes stay.
+    next = { people, shared: current.shared, notes: current.notes };
   }
   await db.update(restaurant).set({ favorites: cleanFavorites(next) }).where(eq(restaurant.id, restaurantId));
   revalidatePath("/takeout", "layout");

@@ -542,6 +542,13 @@ export type RestaurantFavorites = {
   people: Record<string, { dishes: string[]; feeling: RestaurantFeeling | null }>;
   /** Rows saved before quantities existed hold plain strings, and read as one. */
   shared: (string | SharedItem)[];
+  /**
+   * How this family orders a dish here, keyed by the dish's name in lower
+   * case: the sauce on the wings, the sides with the bird, half-and-half on
+   * the pizza. Written out with the order, since it's no use to the person on
+   * the phone otherwise.
+   */
+  notes?: Record<string, string>;
 };
 
 export const restaurant = pgTable("restaurant", {

@@ -20,18 +20,23 @@ const cluckers = cleanFavorites({
     p2: { dishes: [], feeling: "meh" },
   },
   shared: ["Mac and cheese", "Mother Hen", "Mac and Cheese", "  ", { dish: "Mini muffins", qty: "each" }],
+  notes: {
+    "mother hen": "Sides: mac and cheese + rosemary reds, corn muffin",
+    "kids drumsticks meal with fries": "no sauce",
+    "wings, wings, wings": "half BBQ, half mild",
+  },
 });
 
 describe("usual order", () => {
   it("adds up the same dish into one line, plus the table items", () => {
     const order = usualOrder(cluckers, [...kids, ...parents]);
     expect(order.lines).toEqual([
-      { dish: "Kids Drumsticks meal with fries", count: 3, who: ["Kaela", "Alexa", "Brayden"] },
+      { dish: "Kids Drumsticks meal with fries", count: 3, who: ["Kaela", "Alexa", "Brayden"], note: "no sauce" },
     ]);
     expect(order.shared).toEqual([
-      { dish: "Mac and cheese", count: 1 },
-      { dish: "Mother Hen", count: 1 },
-      { dish: "Mini muffins", count: 5 },
+      { dish: "Mac and cheese", count: 1, note: null },
+      { dish: "Mother Hen", count: 1, note: "Sides: mac and cheese + rosemary reds, corn muffin" },
+      { dish: "Mini muffins", count: 5, note: null },
     ]);
     expect(order.missing).toEqual(["Shane", "Jamie"]);
     expect(orderText(order, "Cluckers")).toContain("• 3× Kids Drumsticks meal with fries (Kaela, Alexa, Brayden)");
@@ -39,8 +44,21 @@ describe("usual order", () => {
     expect(orderText(order, "Cluckers")).toContain("• Mother Hen (to share)");
   });
 
+  it("carries how the dish is ordered onto the line", () => {
+    const order = usualOrder(cluckers, [...kids, ...parents]);
+    expect(order.lines[0].note).toBe("no sauce");
+    expect(order.shared.find((s) => s.dish === "Mother Hen")?.note).toBe(
+      "Sides: mac and cheese + rosemary reds, corn muffin",
+    );
+    const text = orderText(order, "Cluckers");
+    expect(text).toContain("• 3× Kids Drumsticks meal with fries (Kaela, Alexa, Brayden) — no sauce");
+    expect(text).toContain("• Mother Hen (to share) — Sides: mac and cheese + rosemary reds, corn muffin");
+    // Nobody orders the wings here, so that note went with the dish.
+    expect(cluckers.notes?.["wings, wings, wings"]).toBeUndefined();
+  });
+
   it("orders one each per person actually eating", () => {
-    expect(usualOrder(cluckers, kids).shared).toContainEqual({ dish: "Mini muffins", count: 3 });
+    expect(usualOrder(cluckers, kids).shared).toContainEqual({ dish: "Mini muffins", count: 3, note: null });
     expect(usualOrder(cluckers, []).shared).not.toContainEqual(expect.objectContaining({ dish: "Mini muffins" }));
   });
 
@@ -55,9 +73,9 @@ describe("usual order", () => {
       { dish: "Muffin", qty: "each" },
     ]);
     expect(usualOrder(saved, kids).shared).toEqual([
-      { dish: "Garlic bread", count: 1 },
-      { dish: "Edamame", count: 2 },
-      { dish: "Muffin", count: 3 },
+      { dish: "Garlic bread", count: 1, note: null },
+      { dish: "Edamame", count: 2, note: null },
+      { dish: "Muffin", count: 3, note: null },
     ]);
   });
 
