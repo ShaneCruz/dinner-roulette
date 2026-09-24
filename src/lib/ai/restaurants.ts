@@ -53,7 +53,7 @@ const researchSchema = z.object({
         tags: z.array(z.string()).describe(`Only from: ${DISH_TAGS.join(", ")}`),
       }),
     )
-    .describe("8-15 representative dishes, best sellers first"),
+    .describe("Every dish on the menu, in menu order, up to 120. Keep kids' items and sides."),
   picks: z.array(z.object({ person: z.string().describe("The exact label, e.g. 'Person A'"), dish: z.string(), why: z.string() })),
   familyOrder: z.string().nullable().describe("A suggested order for the whole group, including anything to share"),
 });
@@ -73,7 +73,7 @@ async function guideFromNotes(
   const labeled = labelDiners(diners);
   const ask = `${
     usuals.length ? `\n\nDishes the family always orders (include every one of these in "dishes", with its description and price from the menu; don't invent details): ${usuals.join(", ")}` : ""
-  }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide from the menu above: list every dish you can read (up to 40), with its exact name, description and price. Give exactly one pick per person, using their exact label.`;
+  }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide from the menu above: list every dish you can read (up to 120), with its exact name, description and price. Give exactly one pick per person, using their exact label.`;
   const content: Content =
     notes.source && notes.source.kind !== "text"
       ? [

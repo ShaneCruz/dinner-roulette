@@ -7,7 +7,12 @@ import { db } from "@/db";
 import { restaurant } from "@/db/schema";
 import { regenerateGroceryList, saveNight } from "@/lib/plan/store";
 import { cleanFavorites, EMPTY_FAVORITES } from "@/lib/restaurants/favorites";
-import { requireActingMember, requireParentMember } from "@/lib/session";
+import { getActiveMembers, requireActingMember, requireParentMember } from "@/lib/session";
+import { friendlyAiError } from "@/lib/ai/claude";
+import { askAboutMenu } from "@/lib/ai/menu-chat";
+import type { ChatTurn } from "@/lib/ai/kitchen";
+import { getRestaurant, loadDiners } from "@/lib/restaurants/store";
+import { SPICE_LABELS } from "@/lib/family";
 
 const restaurantSchema = z.object({
   name: z.string().trim().min(1, "Give it a name").max(80),
@@ -104,4 +109,53 @@ export async function saveFavorites(
   await db.update(restaurant).set({ favorites: cleanFavorites(next) }).where(eq(restaurant.id, restaurantId));
   revalidatePath("/takeout", "layout");
   return { ok: true };
+}
+
+/**
+ * Questions about a restaurant's menu: "I always get the gyros, but I want
+ * something lighter — what else is good?" It answers from the menu we hold,
+ * so it only helps once that menu is real.
+ */
+export async function askMenuQuestion(
+  restaurantId: string,
+  history: ChatTurn[],
+): Promise<{ error: string } | { answer: string }> {
+  await requireActingMember();
+  if (!z.uuid().safeParse(restaurantId).success) return { error: "Unknown restaurant." };
+  const turns = history
+    .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
+    .slice(-8)
+    .map((t) => ({ role: t.role, content: t.content.slice(0, 1000) }));
+  if (!turns.length || turns[turns.length - 1].role !== "user") return { error: "Ask a question first." };
+
+  const place = await getRestaurant(db, restaurantId);
+  if (!place) return { error: "That restaurant is gone." };
+  const dishes = place.research?.dishes ?? [];
+  if (!dishes.length) return { error: "We don't have this menu yet. Paste or photograph it first." };
+
+  try {
+    const members = await getActiveMembers();
+    const diners = await loadDiners(db);
+    const favorites = place.favorites ?? null;
+    const answer = await askAboutMenu(
+      {
+        restaurantName: place.name,
+        dishes,
+        diners: members.map((m) => {
+          const diner = diners.find((d) => d.memberId === m.id);
+          return {
+            name: m.name,
+            spice: SPICE_LABELS[m.spiceTolerance] ?? "mild",
+            nopes: diner?.nopes ?? [],
+            usual: favorites?.people[m.id]?.dishes[0] ?? null,
+          };
+        }),
+      },
+      turns,
+    );
+    return { answer };
+  } catch (error) {
+    console.error("Menu question failed", error);
+    return { error: friendlyAiError(error) };
+  }
 }
