@@ -72,7 +72,9 @@ export async function POST(request: Request, { params }: RouteContext<"/api/rest
     await db
       .update(restaurant)
       .set({
-        research: menuFromFamily(place.research, result),
+        // ?replace=1 starts the menu over instead of adding to it, for when a
+        // reload would otherwise pile near-duplicates on top of the old names.
+        research: menuFromFamily(new URL(request.url).searchParams.has("replace") ? null : place.research, result),
         researchedAt: new Date(),
         researchError: null,
         researchStartedAt: null,
