@@ -5,7 +5,7 @@ import { Avatar, Button, Card, cx, inputClass } from "@/components/ui";
 import { formatGroceryAmount } from "@/lib/grocery/build";
 import { guessSection } from "@/lib/grocery/guess-section";
 import type { GrocerySnapshot } from "@/lib/grocery/store";
-import { neededBetween, neededBy, useGrocerySync } from "@/lib/grocery/sync";
+import { neededBy, nightsStillAhead, useGrocerySync } from "@/lib/grocery/sync";
 import { useStoredChoice } from "@/lib/dismissed";
 import { addDays } from "@/lib/presence";
 import { formatDay } from "@/lib/plan/week";
@@ -24,6 +24,7 @@ export function GroceryList({
   members,
   today,
   dates,
+  cookedDates,
 }: {
   weekPlanId: string;
   initial: GrocerySnapshot;
@@ -33,6 +34,8 @@ export function GroceryList({
   today: string;
   /** The week's nights, first to last */
   dates: string[];
+  /** Nights whose dinner is already made, so their shopping is over */
+  cookedDates: string[];
 }) {
   const { snapshot, change, online, pendingCount } = useGrocerySync(weekPlanId, initial, actingId);
   const [newItem, setNewItem] = useState("");
@@ -43,16 +46,16 @@ export function GroceryList({
   const from = dates[0] && today > dates[0] ? today : dates[0];
   const soonUntil = addDays(from ?? today, 2);
   const cutoff = window === "soon" ? soonUntil : window === "week" ? dates[dates.length - 1] : null;
-  // Nights already behind us are done with, however the week was shopped, so
-  // the window starts today rather than at the start of the week.
-  const inWindow = (item: Item) => neededBetween(item, window === "all" ? dates[0] ?? from : from, cutoff);
+  // Dinners already made are done with in every window, so they never reach
+  // the list itself — narrowing the window shouldn't be what hides them.
+  const ahead = (item: Item) => nightsStillAhead(item, from ?? today, cookedDates);
+  const alreadyMade = (item: Item) => item.sources.length > 0 && ahead(item).length === 0;
+  const inWindow = (item: Item) => !cutoff || !item.sources.length || ahead(item).some((date) => date <= cutoff);
 
   const active = snapshot.items.filter((i) => !i.isStale);
-  const toBuy = active.filter((i) => !i.isStaple && inWindow(i));
-  // Only for dinners already behind us: bought or not, that shopping is over.
-  const cooked = (item: Item) => !inWindow(item) && !neededBetween(item, from, null);
-  const later = active.filter((i) => !i.isStaple && !inWindow(i) && !cooked(i));
-  const past = active.filter((i) => !i.isStaple && cooked(i));
+  const toBuy = active.filter((i) => !i.isStaple && !alreadyMade(i) && inWindow(i));
+  const later = active.filter((i) => !i.isStaple && !alreadyMade(i) && !inWindow(i));
+  const past = active.filter((i) => !i.isStaple && alreadyMade(i));
   const staples = active.filter((i) => i.isStaple);
   const stale = snapshot.items.filter((i) => i.isStale);
   const done = toBuy.filter((i) => i.checked).length;
