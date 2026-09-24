@@ -40,10 +40,24 @@ export function cleanFavorites(input: RestaurantFavorites): RestaurantFavorites 
     const qty = found?.qty === "each" ? ("each" as const) : Math.min(Math.max(Math.round(Number(found?.qty) || 1), 1), 20);
     return { dish, qty };
   });
-  return { people, shared: shared.slice(0, 20) };
+  // Keep a note only while the dish it belongs to is still a favorite.
+  const kept = new Set([...Object.values(people).flatMap((p) => p.dishes), ...shared.map((s) => s.dish)].map((d) => d.toLowerCase()));
+  const notes: Record<string, string> = {};
+  for (const [dish, note] of Object.entries(input.notes ?? {})) {
+    const key = dish.trim().toLowerCase();
+    const text = note.trim().replace(/\s+/g, " ").slice(0, 200);
+    if (text && kept.has(key)) notes[key] = text;
+  }
+
+  return { people, shared: shared.slice(0, 20), ...(Object.keys(notes).length ? { notes } : {}) };
 }
 
-export type OrderLine = { dish: string; count: number; who: string[] };
+/** How this family orders a dish here, if they've said. */
+export function noteFor(favorites: RestaurantFavorites | null, dish: string): string | null {
+  return favorites?.notes?.[dish.trim().toLowerCase()] ?? null;
+}
+
+export type OrderLine = { dish: string; count: number; who: string[]; note?: string | null };
 
 /**
  * Adds up the usual order for the people eating: each person's first
@@ -53,7 +67,7 @@ export function usualOrder(
   favorites: RestaurantFavorites | null,
   people: { id: string; name: string }[],
   choices: Record<string, string> = {},
-): { lines: OrderLine[]; shared: { dish: string; count: number }[]; missing: string[] } {
+): { lines: OrderLine[]; shared: { dish: string; count: number; note?: string | null }[]; missing: string[] } {
   const lines: OrderLine[] = [];
   const missing: string[] = [];
   for (const person of people) {
@@ -66,21 +80,25 @@ export function usualOrder(
     if (line) {
       line.count++;
       line.who.push(person.name);
-    } else lines.push({ dish, count: 1, who: [person.name] });
+    } else lines.push({ dish, count: 1, who: [person.name], note: noteFor(favorites, dish) });
   }
   // "One each" follows whoever's eating tonight, so a night without the kids
   // doesn't order five muffins.
   const shared = sharedItems(favorites).map((item) => ({
     dish: item.dish,
     count: item.qty === "each" ? people.length : item.qty,
+    note: noteFor(favorites, item.dish),
   }));
   return { lines, shared: shared.filter((s) => s.count > 0), missing };
 }
 
 export function orderText(order: ReturnType<typeof usualOrder>, restaurantName: string): string {
+  // The note is the half of the order the restaurant needs: sauce, sides,
+  // half-and-half. It goes on the line, not in a footnote.
+  const note = (text: string | null | undefined) => (text ? ` — ${text}` : "");
   const rows = [
-    ...order.lines.map((l) => `${l.count > 1 ? `${l.count}× ` : ""}${l.dish} (${l.who.join(", ")})`),
-    ...order.shared.map((s) => `${s.count > 1 ? `${s.count}× ` : ""}${s.dish} (to share)`),
+    ...order.lines.map((l) => `${l.count > 1 ? `${l.count}× ` : ""}${l.dish} (${l.who.join(", ")})${note(l.note)}`),
+    ...order.shared.map((s) => `${s.count > 1 ? `${s.count}× ` : ""}${s.dish} (to share)${note(s.note)}`),
   ];
   return `${restaurantName} order:\n${rows.map((r) => `• ${r}`).join("\n")}`;
 }

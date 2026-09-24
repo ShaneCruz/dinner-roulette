@@ -19,6 +19,8 @@ import {
 import { saveFavorites } from "../actions";
 
 type Person = { id: string; name: string; emoji: string; color: string; role: "parent" | "kid"; traits: ChooserTraits };
+/** How the family orders each dish here, keyed by the dish name in lower case. */
+type Notes = Record<string, string>;
 
 export function UsualOrder({
   restaurantId,
@@ -160,10 +162,10 @@ export function UsualOrder({
           <p className="text-sm font-bold uppercase tracking-widest text-basil">The order</p>
           <ul className="mt-2 space-y-2">
             {order.lines.map((l) => (
-              <OrderLine key={l.dish} dish={l.dish} count={l.count} who={l.who.join(", ")} research={research} />
+              <OrderLine key={l.dish} dish={l.dish} count={l.count} who={l.who.join(", ")} note={l.note} research={research} />
             ))}
             {order.shared.map((s) => (
-              <OrderLine key={s.dish} dish={s.dish} count={s.count} who="to share" research={research} />
+              <OrderLine key={s.dish} dish={s.dish} count={s.count} who="to share" note={s.note} research={research} />
             ))}
           </ul>
           {total ? (
@@ -208,11 +210,13 @@ function OrderLine({
   dish,
   count,
   who,
+  note,
   research,
 }: {
   dish: string;
   count: number;
   who: string;
+  note?: string | null;
   research: { dishes: RestaurantDish[]; picks: RestaurantPick[] } | null;
 }) {
   const menu = research ? findDish(dish, research.dishes) : undefined;
@@ -236,6 +240,7 @@ function OrderLine({
           </span>
         ) : null}
       </div>
+      {note ? <p className="text-sm font-semibold text-basil">→ {note}</p> : null}
       {menu?.description ? <p className="text-xs text-muted">{menu.description}</p> : null}
     </li>
   );
@@ -311,14 +316,32 @@ function Chooser({
   );
 }
 
+/** "BBQ and mild", "mac and cheese + rosemary reds": the half of the order the kitchen needs. */
+function NoteInput({ dish, notes, onNote }: { dish: string; notes: Notes; onNote: (dish: string, note: string) => void }) {
+  return (
+    <input
+      className="mt-1 w-full rounded-full border border-dashed border-border bg-transparent px-3 py-1 text-xs placeholder:text-muted"
+      value={notes[dish.toLowerCase()] ?? ""}
+      placeholder="How you order it — sauce, sides, half and half…"
+      maxLength={200}
+      aria-label={`How you order ${dish}`}
+      onChange={(e) => onNote(dish, e.target.value)}
+    />
+  );
+}
+
 function DishList({
   dishes,
   onChange,
   placeholder,
+  notes,
+  onNote,
 }: {
   dishes: string[];
   onChange: (dishes: string[]) => void;
   placeholder: string;
+  notes: Notes;
+  onNote: (dish: string, note: string) => void;
 }) {
   const [draft, setDraft] = useState("");
   const add = () => {
@@ -329,19 +352,22 @@ function DishList({
   return (
     <div className="space-y-2">
       {dishes.length ? (
-        <ul className="flex flex-wrap gap-1.5">
+        <ul className="space-y-1.5">
           {dishes.map((d, i) => (
-            <li key={d} className="flex items-center gap-1 rounded-full bg-surface-muted py-1 pl-3 pr-1 text-sm">
-              {i === 0 && dishes.length > 1 ? <span title="Their usual">⭐</span> : null}
-              {d}
-              <button
-                type="button"
-                aria-label={`Remove ${d}`}
-                onClick={() => onChange(dishes.filter((x) => x !== d))}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-surface"
-              >
-                ×
-              </button>
+            <li key={d} className="rounded-2xl bg-surface-muted px-3 py-1.5 text-sm">
+              <div className="flex items-center gap-1">
+                {i === 0 && dishes.length > 1 ? <span title="Their usual">⭐</span> : null}
+                <span className="flex-1 truncate">{d}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${d}`}
+                  onClick={() => onChange(dishes.filter((x) => x !== d))}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface"
+                >
+                  ×
+                </button>
+              </div>
+              <NoteInput dish={d} notes={notes} onNote={onNote} />
             </li>
           ))}
         </ul>
@@ -372,7 +398,17 @@ function DishList({
  * Table items, with how many of each. "One each" is the common case — a muffin
  * per person — and it follows whoever's eating rather than freezing a number.
  */
-function SharedList({ items, onChange }: { items: SharedItem[]; onChange: (items: SharedItem[]) => void }) {
+function SharedList({
+  items,
+  onChange,
+  notes,
+  onNote,
+}: {
+  items: SharedItem[];
+  onChange: (items: SharedItem[]) => void;
+  notes: Notes;
+  onNote: (dish: string, note: string) => void;
+}) {
   const [draft, setDraft] = useState("");
   const add = () => {
     const dish = draft.trim();
@@ -387,7 +423,8 @@ function SharedList({ items, onChange }: { items: SharedItem[]; onChange: (items
       {items.length ? (
         <ul className="space-y-1.5">
           {items.map((item) => (
-            <li key={item.dish} className="flex items-center gap-2 rounded-2xl bg-surface-muted py-1 pl-3 pr-1 text-sm">
+            <li key={item.dish} className="rounded-2xl bg-surface-muted px-3 py-1.5 text-sm">
+              <div className="flex items-center gap-2">
               <span className="flex-1 truncate">{item.dish}</span>
               <select
                 className="rounded-full border border-border bg-surface px-2 py-1 text-sm font-semibold"
@@ -410,6 +447,8 @@ function SharedList({ items, onChange }: { items: SharedItem[]; onChange: (items
               >
                 ×
               </button>
+              </div>
+              <NoteInput dish={item.dish} notes={notes} onNote={onNote} />
             </li>
           ))}
         </ul>
@@ -462,6 +501,9 @@ function FavoritesEditor({
   const entry = (id: string) => draft.people[id] ?? { dishes: [], feeling: null };
   const setEntry = (id: string, next: { dishes: string[]; feeling: RestaurantFeeling | null }) =>
     setDraft((d) => ({ ...d, people: { ...d.people, [id]: next } }));
+  const notes: Notes = draft.notes ?? {};
+  const setNote = (dish: string, note: string) =>
+    setDraft((d) => ({ ...d, notes: { ...d.notes, [dish.toLowerCase()]: note } }));
 
   return (
     <Card className="space-y-5">
@@ -504,6 +546,8 @@ function FavoritesEditor({
               dishes={mine.dishes}
               placeholder={`${p.name}'s go-to dish`}
               onChange={(dishes) => setEntry(p.id, { ...mine, dishes })}
+              notes={notes}
+              onNote={setNote}
             />
             {isParent && p.role === "kid" && kids.length > 1 && mine.dishes.length ? (
               <button
@@ -525,6 +569,8 @@ function FavoritesEditor({
           <SharedList
             items={sharedItems(draft)}
             onChange={(shared) => setDraft((d) => ({ ...d, shared }))}
+            notes={notes}
+            onNote={setNote}
           />
         </div>
       ) : null}
