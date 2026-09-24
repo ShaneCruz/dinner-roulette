@@ -5,7 +5,7 @@ import { Avatar, Button, Card, cx, inputClass } from "@/components/ui";
 import { formatGroceryAmount } from "@/lib/grocery/build";
 import { guessSection } from "@/lib/grocery/guess-section";
 import type { GrocerySnapshot } from "@/lib/grocery/store";
-import { neededBy, useGrocerySync } from "@/lib/grocery/sync";
+import { neededBetween, neededBy, useGrocerySync } from "@/lib/grocery/sync";
 import { useStoredChoice } from "@/lib/dismissed";
 import { addDays } from "@/lib/presence";
 import { formatDay } from "@/lib/plan/week";
@@ -43,15 +43,16 @@ export function GroceryList({
   const from = dates[0] && today > dates[0] ? today : dates[0];
   const soonUntil = addDays(from ?? today, 2);
   const cutoff = window === "soon" ? soonUntil : window === "week" ? dates[dates.length - 1] : null;
-  // Things you added yourself have no night, so they're always on the list.
-  const inWindow = (item: Item) => {
-    const needed = neededBy(item);
-    return !cutoff || !needed || needed <= cutoff;
-  };
+  // Nights already behind us are done with, however the week was shopped, so
+  // the window starts today rather than at the start of the week.
+  const inWindow = (item: Item) => neededBetween(item, window === "all" ? dates[0] ?? from : from, cutoff);
 
   const active = snapshot.items.filter((i) => !i.isStale);
   const toBuy = active.filter((i) => !i.isStaple && inWindow(i));
-  const later = active.filter((i) => !i.isStaple && !inWindow(i));
+  // Only for dinners already behind us: bought or not, that shopping is over.
+  const cooked = (item: Item) => !inWindow(item) && !neededBetween(item, from, null);
+  const later = active.filter((i) => !i.isStaple && !inWindow(i) && !cooked(i));
+  const past = active.filter((i) => !i.isStaple && cooked(i));
   const staples = active.filter((i) => i.isStaple);
   const stale = snapshot.items.filter((i) => i.isStale);
   const done = toBuy.filter((i) => i.checked).length;
@@ -226,6 +227,26 @@ export function GroceryList({
           </summary>
           <ul className="mt-2">
             {later
+              .sort((a, b) => (neededBy(a) ?? "").localeCompare(neededBy(b) ?? "") || a.name.localeCompare(b.name))
+              .map((item) => (
+                <GroceryRow
+                  key={item.id}
+                  item={item}
+                  checker={item.checkedByMemberId ? memberById.get(item.checkedByMemberId) : undefined}
+                  onToggle={() => change({ op: "check", id: item.id, checked: !item.checked })}
+                />
+              ))}
+          </ul>
+        </details>
+      ) : null}
+
+      {past.length > 0 ? (
+        <details className="no-print rounded-2xl border border-dashed border-border p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-muted">
+            ✓ For dinners already made ({past.length} {past.length === 1 ? "item" : "items"})
+          </summary>
+          <ul className="mt-2">
+            {past
               .sort((a, b) => (neededBy(a) ?? "").localeCompare(neededBy(b) ?? "") || a.name.localeCompare(b.name))
               .map((item) => (
                 <GroceryRow

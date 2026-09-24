@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GrocerySnapshot } from "./store";
-import { applyOp } from "./sync";
+import { applyOp, neededBetween } from "./sync";
 
 const snapshot: GrocerySnapshot = {
   items: [
@@ -44,5 +44,35 @@ describe("applyOp", () => {
     const claimed = applyOp(snapshot, { op: "claim", section: "produce", claim: true }, "me");
     expect(claimed.claims).toEqual([{ section: "produce", memberId: "me" }]);
     expect(applyOp(claimed, { op: "claim", section: "produce", claim: false }, "me").claims).toEqual([]);
+  });
+});
+
+describe("what still needs buying", () => {
+  const item = (...dates: string[]) => ({ sources: dates.map((date) => ({ date })) });
+  // Wednesday. Monday's chili is eaten; Thursday and Friday are still to come.
+  const today = "2026-09-23";
+  const friday = "2026-09-25";
+
+  it("drops a dinner that's already been made", () => {
+    expect(neededBetween(item("2026-09-21"), today, friday)).toBe(false);
+  });
+
+  it("keeps something the rest of the week still needs", () => {
+    expect(neededBetween(item("2026-09-24"), today, friday)).toBe(true);
+    expect(neededBetween(item(today), today, friday)).toBe(true);
+  });
+
+  it("keeps an ingredient shared with a dinner already made", () => {
+    // One onion for Monday's chili and Friday's roast: Friday still needs it.
+    expect(neededBetween(item("2026-09-21", friday), today, friday)).toBe(true);
+  });
+
+  it("leaves out what's needed after the window", () => {
+    expect(neededBetween(item("2026-09-26"), today, friday)).toBe(false);
+    expect(neededBetween(item("2026-09-26"), today, null)).toBe(true);
+  });
+
+  it("always keeps what you added yourself", () => {
+    expect(neededBetween(item(), today, friday)).toBe(true);
   });
 });
