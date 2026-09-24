@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { recipe, restaurant } from "@/db/schema";
 import { usualDishes } from "@/lib/restaurants/store";
-import { sameDish } from "@/lib/restaurants/favorites";
+import { findDish } from "@/lib/restaurants/favorites";
 import { adminRequest } from "@/lib/admin-auth";
 
 /**
@@ -35,7 +35,8 @@ export async function GET(request: Request) {
           menuDishes: dishes.map((d) => ({ name: d.name, price: d.price })),
           usuals: usuals.map((ours) => ({
             ours,
-            matched: dishes.find((d) => sameDish(d.name, ours))?.name ?? null,
+            // The same call the app makes, so this reports what people see.
+            matched: findDish(ours, dishes)?.name ?? null,
           })),
         };
       }),
