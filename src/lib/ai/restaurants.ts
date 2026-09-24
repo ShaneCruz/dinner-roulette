@@ -54,7 +54,7 @@ const researchSchema = z.object({
       }),
     )
     .describe(
-      "Every dish on the menu, in menu order, section by section to the very end. Include kids' items, sides and desserts. Don't stop early or summarise a section; a menu can run to 200 dishes.",
+      "Every dish on the menu, in menu order, section by section to the very end. Include kids' items, sides and desserts. Don't stop early or summarise a section; a menu can run to 200 dishes. One entry per dish as the menu names it — where a dish offers a choice of protein or size, keep the single entry and put the choice in its description, never one entry per combination.",
     ),
   picks: z.array(z.object({ person: z.string().describe("The exact label, e.g. 'Person A'"), dish: z.string(), why: z.string() })),
   familyOrder: z.string().nullable().describe("A suggested order for the whole group, including anything to share"),
