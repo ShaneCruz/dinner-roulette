@@ -182,3 +182,15 @@ export function neededBy(item: { sources: { date: string }[] }): string | null {
   const dates = item.sources.map((s) => s.date).sort();
   return dates[0] ?? null;
 }
+
+/**
+ * Is this needed for a dinner between these nights? Asked of every night the
+ * item belongs to, not just the first: an onion bought for Monday's chili and
+ * Friday's roast still needs buying on Thursday, while one bought only for a
+ * dinner already eaten does not.
+ */
+export function neededBetween(item: { sources: { date: string }[] }, from: string, to: string | null): boolean {
+  // Things you added yourself have no night, so they're always on the list.
+  if (!item.sources.length) return true;
+  return item.sources.some((s) => s.date >= from && (!to || s.date <= to));
+}
