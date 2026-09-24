@@ -74,7 +74,9 @@ async function guideFromNotes(
 ): Promise<RestaurantResearch | { error: string }> {
   const labeled = labelDiners(diners);
   const ask = `${
-    usuals.length ? `\n\nDishes the family always orders (include every one of these in "dishes", with its description and price from the menu; don't invent details): ${usuals.join(", ")}` : ""
+    usuals.length
+      ? `\n\nWhat this family calls their usual orders: ${usuals.join(", ")}. These are their words, not the menu's — make sure the dishes they mean are in "dishes", but always under the menu's own name and price. Never add an entry for a name that isn't on the menu.`
+      : ""
   }\n\nThe people ordering:\n${labeled.map((l) => l.description).join("\n")}\n\nBuild the guide from the menu above. Work through it section by section to the very end and list every dish, with its exact name, description and price — the last section matters as much as the first. Give exactly one pick per person, using their exact label.`;
   const content: Content =
     notes.source && notes.source.kind !== "text"
