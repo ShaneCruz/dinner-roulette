@@ -47,7 +47,12 @@ test("every page opens without crashing", async ({ page }) => {
   // The dev server compiles each page on first visit.
   test.setTimeout(180_000);
   const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
+  page.on("pageerror", (error) => {
+    // React's dev profiler throws when the clock jumps backwards, which WSL
+    // does whenever the machine sleeps. It says nothing about the app.
+    if (error.message.includes("cannot have a negative time stamp")) return;
+    errors.push(`${page.url()}: ${error.message}`);
+  });
 
   await signInAsParent(page);
 
@@ -63,6 +68,8 @@ test("every page opens without crashing", async ({ page }) => {
     "/recipes/import",
     "/recipes/import/send-button",
     "/recipes/discover",
+    "/quick",
+    "/quick?minutes=20",
     "/takeout",
     "/takeout/spin",
     "/session",
