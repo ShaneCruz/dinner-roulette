@@ -6,6 +6,8 @@ import {
   addCookPhoto,
   cookingStats,
   deleteCookPhoto,
+  dishesFrom,
+  madeDinners,
   latestCookPhotos,
   listCookPhotos,
   loadHighlights,
@@ -112,20 +114,36 @@ describe("Chef Highlights", () => {
   });
 
   it("adds up dinners cooked and different dishes", async () => {
-    const stats = await cookingStats(db);
+    const stats = cookingStats(await madeDinners(db));
     expect(stats.dinners).toBe(2);
     expect(stats.dishes).toBe(1);
+    expect(stats.firstTries).toBe(1);
     expect(stats.since).toBe("2026-09-01");
     expect(stats.photos).toBeGreaterThan(0);
   });
 
   it("counts a dinner that was photographed but never marked made", async () => {
     await addCookPhoto(db, { ...photo("2026-10-06", "DDD"), recipeId: riceId });
-    const stats = await cookingStats(db);
+    const stats = cookingStats(await madeDinners(db));
     expect(stats.dinners).toBe(3);
     expect(stats.dishes).toBe(2);
     const rice = (await loadHighlights(db)).find((h) => h.madeOn === "2026-10-06")!;
     expect(rice.makeNumber).toBe(1);
+  });
+
+  it("lists the dinners behind the numbers, with what's missing a photo and when to date one", async () => {
+    await saveNight(db, "2026-10-08", 0, { recipeId: tacosId, status: "cooked" });
+    const dinners = await madeDinners(db);
+    expect(dinners.map((d) => d.date)).toEqual(["2026-10-08", "2026-10-06", "2026-10-05", "2026-09-01"]);
+    const unphotographed = dinners[0];
+    expect(unphotographed.photoIds).toEqual([]);
+    expect(unphotographed.mealId).not.toBeNull();
+    expect(dinners.filter((d) => d.firstTime).map((d) => d.date).sort()).toEqual(["2026-09-01", "2026-10-06"]);
+
+    const [tacos, rice] = dishesFrom(dinners);
+    expect(tacos).toMatchObject({ title: "Taco Night", times: 3, firstDate: "2026-09-01", lastDate: "2026-10-08" });
+    expect(tacos.photos).toBeGreaterThan(0);
+    expect(rice).toMatchObject({ times: 1, photos: 1 });
   });
 
   it("says first time, 2nd, 3rd, 11th", () => {
