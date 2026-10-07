@@ -42,7 +42,7 @@ export default async function PrintRecipePage({
             {COOK_METHOD_LABELS[recipe.method]}
           </p>
         </div>
-        <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="h-28 w-40 shrink-0 rounded-xl" />
+        <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="h-32 w-auto max-w-48 shrink-0 rounded-xl" />
       </header>
 
       <div className="mt-4 grid grid-cols-[2fr_3fr] gap-6">

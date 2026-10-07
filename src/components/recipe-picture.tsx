@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { cx } from "@/components/ui";
 
 /**
  * A recipe's picture. Pictures from recipe sites are linked rather than
@@ -31,7 +30,7 @@ export function RecipePicture({
       // Some recipe sites refuse pictures shown on other sites when told where they're shown.
       referrerPolicy="no-referrer"
       onError={() => setBroken(src)}
-      className={cx("object-cover", className)}
+      className={className}
     />
   );
 }

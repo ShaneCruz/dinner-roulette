@@ -97,7 +97,7 @@ export default async function RecipePage({ params, searchParams }: PageProps<"/r
         <RecipePicture
           src={picture}
           alt={recipe.title}
-          className="mb-4 aspect-[16/9] max-h-96 w-full rounded-3xl bg-surface-muted"
+          className="mb-4 h-auto max-h-[28rem] w-auto max-w-full rounded-3xl"
         />
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">

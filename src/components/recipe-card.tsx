@@ -26,7 +26,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
           <RecipePicture
             src={recipePictureSrc(recipe)}
             alt=""
-            className="h-16 w-16 shrink-0 rounded-2xl bg-surface-muted"
+            className="h-16 w-16 shrink-0 rounded-2xl bg-surface-muted object-cover"
             fallback={
               <span className="text-3xl" aria-hidden>
                 {METHOD_EMOJI[recipe.method]}

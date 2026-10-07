@@ -291,7 +291,7 @@ function Preview({
         {preview && "error" in preview ? <p className="py-8 text-center text-muted">{preview.error}</p> : null}
         {recipe ? (
           <>
-            <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="aspect-[16/9] w-full rounded-2xl bg-surface-muted" />
+            <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="mx-auto h-auto max-h-64 w-auto max-w-full rounded-2xl" />
             <div>
               <p className="text-lg font-bold leading-tight">{recipe.title}</p>
               <p className="mt-1 text-sm text-muted">{recipe.description}</p>
