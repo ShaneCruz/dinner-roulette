@@ -3,7 +3,19 @@ import type { Database } from "@/db";
 import { STARTER_RECIPES } from "@/data/starter-recipes";
 import { createTestDatabase } from "@/test/db";
 import { seedStarterRecipes } from "./seed";
-import { getRecipe, listRecipes, saveRecipe, setRecipeArchived, slugify, uniqueSlug } from "./store";
+import {
+  findBySourceUrl,
+  getRecipe,
+  getRecipePhoto,
+  listRecipes,
+  removeRecipePhoto,
+  saveRecipe,
+  saveRecipePhoto,
+  setRecipeArchived,
+  setRecipeImageUrl,
+  slugify,
+  uniqueSlug,
+} from "./store";
 
 let db: Database;
 
@@ -62,5 +74,33 @@ describe("recipe store", () => {
     expect(slugify("Mom's Famous Chili!")).toBe("mom-s-famous-chili");
     expect(await uniqueSlug(db, "taco-night")).toBe("taco-night-2");
     expect(await uniqueSlug(db, "brand-new-dish")).toBe("brand-new-dish");
+  });
+});
+
+describe("pictures and where a recipe came from", () => {
+  it("finds a page sent again, whatever the tracking junk on its address", async () => {
+    const tacos = (await getRecipe(db, { slug: "taco-night" }))!;
+    await saveRecipe(db, tacos, { source: "import", sourceUrl: "https://www.allrecipes.com/recipe/123/tacos/" }, tacos.id);
+    expect((await findBySourceUrl(db, "https://allrecipes.com/recipe/123/tacos?utm_source=x#top"))?.id).toBe(tacos.id);
+    expect(await findBySourceUrl(db, "https://www.allrecipes.com/recipe/456/other/")).toBeNull();
+  });
+
+  it("keeps the picture through edits, and the family's photo comes and goes", async () => {
+    const tacos = (await getRecipe(db, { slug: "taco-night" }))!;
+    await setRecipeImageUrl(db, tacos.id, "https://img.example.com/tacos.jpg");
+    await saveRecipe(db, { ...tacos, title: "Taco Tuesday" }, { source: "import", sourceUrl: tacos.sourceUrl }, tacos.id);
+    let stored = (await getRecipe(db, { id: tacos.id }))!;
+    expect(stored.imageUrl).toBe("https://img.example.com/tacos.jpg");
+    expect(stored.photoAt).toBeNull();
+
+    await saveRecipePhoto(db, tacos.id, { contentType: "image/jpeg", data: "AAAA" });
+    stored = (await getRecipe(db, { id: tacos.id }))!;
+    expect(stored.photoAt).not.toBeNull();
+    expect((await getRecipePhoto(db, tacos.id))?.data).toBe("AAAA");
+    expect((await listRecipes(db, { search: "Taco Tuesday" }))[0].photoAt).not.toBeNull();
+
+    await removeRecipePhoto(db, tacos.id);
+    expect((await getRecipe(db, { id: tacos.id }))!.photoAt).toBeNull();
+    expect(await getRecipePhoto(db, tacos.id)).toBeNull();
   });
 });

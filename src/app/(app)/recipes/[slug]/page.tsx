@@ -30,6 +30,10 @@ import { REASONS, reasonLabel } from "@/lib/ratings/scale";
 import { EstimateNutritionButton } from "./estimate-button";
 import { NutritionFacts } from "@/components/nutrition-facts";
 import { aiEnabled } from "@/lib/ai/claude";
+import { siteName } from "@/lib/ai/fetch-page";
+import { recipePictureSrc } from "@/lib/recipes/picture";
+import { RecipePicture } from "@/components/recipe-picture";
+import { PictureControls } from "./picture-controls";
 
 // Asking Claude for a recipe tweak can take a minute.
 export const maxDuration = 300;
@@ -39,7 +43,14 @@ export async function generateMetadata({ params }: PageProps<"/recipes/[slug]">)
   return { title: found?.title ?? "Recipe" };
 }
 
-export default async function RecipePage({ params }: PageProps<"/recipes/[slug]">) {
+const SENT: Record<string, string> = {
+  photo: "✓ Already in your recipe box. Added its picture.",
+  same: "Already in your recipe box, so here it is.",
+  "old-button":
+    "Already in your recipe box. To bring its picture too, set up the Send to Cruz Meals button again (Add a recipe → Send button), then send it once more.",
+};
+
+export default async function RecipePage({ params, searchParams }: PageProps<"/recipes/[slug]">) {
   const { acting, settings } = await requireActingMember();
   const recipe = await getRecipe(db, { slug: (await params).slug });
   if (!recipe) notFound();
@@ -65,6 +76,10 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const heatFor = recipe.spiceSplit ? heatSeekers(audience).map((m) => m.name) : [];
   const conflicts = nopeConflicts(recipe, audience);
   const isParent = acting.role === "parent";
+  const picture = recipePictureSrc(recipe);
+  const site = recipe.sourceUrl ? siteName(recipe.sourceUrl) : null;
+  const sent = (await searchParams).sent;
+  const sentNote = typeof sent === "string" ? SENT[sent] : undefined;
   const [proposal, revision] = isParent
     ? await Promise.all([pendingProposal(db, recipe.id), latestRevision(db, recipe.id)])
     : [null, null];
@@ -77,11 +92,38 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
       <Link href="/recipes" className="no-print text-sm font-semibold text-muted hover:text-foreground">
         ← Recipe box
       </Link>
+      {sentNote ? <p className="no-print mt-3 rounded-2xl bg-basil-soft px-4 py-3 text-sm text-basil">{sentNote}</p> : null}
       <header className="mb-6 mt-3">
+        <RecipePicture
+          src={picture}
+          alt={recipe.title}
+          className="mb-4 aspect-[16/9] max-h-96 w-full rounded-3xl bg-surface-muted"
+        />
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-3xl font-bold sm:text-4xl">{recipe.title}</h1>
             <p className="mt-2 max-w-2xl text-lg text-muted">{recipe.description}</p>
+            {recipe.sourceUrl ? (
+              <a
+                href={recipe.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="no-print mt-1 inline-block text-sm font-semibold text-tomato hover:underline"
+              >
+                See the original on {site ?? "the web"} ↗
+              </a>
+            ) : null}
+            {isParent ? (
+              <div className="mt-2">
+                <PictureControls
+                  recipeId={recipe.id}
+                  hasPicture={Boolean(picture)}
+                  hasOwnPhoto={Boolean(recipe.photoAt)}
+                  canFetch={Boolean(recipe.sourceUrl) && !recipe.imageUrl}
+                  siteName={site}
+                />
+              </div>
+            ) : null}
           </div>
           <div className="no-print flex flex-wrap gap-2">
             <ButtonLink href={`/cook/${recipe.slug}`} size="sm">

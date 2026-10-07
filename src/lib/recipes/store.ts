@@ -1,7 +1,7 @@
 import { and, asc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "@/db";
 import { findSimilar } from "./similar";
-import { recipe, recipeIngredient, recipeVariant, type Nutrition } from "@/db/schema";
+import { recipe, recipeIngredient, recipePhoto, recipeVariant, type Nutrition } from "@/db/schema";
 import {
   recipeInputSchema,
   type CookMethod,
@@ -22,6 +22,8 @@ export type StoredRecipe = Recipe & {
   id: string;
   source: RecipeSource;
   sourceUrl: string | null;
+  imageUrl: string | null;
+  photoAt: Date | null;
   status: "draft" | "approved";
   notes: string | null;
   archivedAt: Date | null;
@@ -47,6 +49,8 @@ export type RecipeSummary = Pick<
   | "healthCategory"
   | "seasonFit"
   | "status"
+  | "imageUrl"
+  | "photoAt"
 >;
 
 type SaveOptions = {
@@ -56,6 +60,8 @@ type SaveOptions = {
   /** Rating on the site it came from; leave undefined to keep what's there */
   sourceRating?: SourceRating | null;
   sourceUrl?: string | null;
+  /** The source site's picture; leave undefined to keep what's there */
+  imageUrl?: string | null;
   status?: "draft" | "approved";
   notes?: string | null;
   createdByMemberId?: string | null;
@@ -103,6 +109,7 @@ export async function saveRecipe(
           sourceRatingCount: options.sourceRating?.count ?? null,
         }
       : {}),
+    ...(options.imageUrl !== undefined ? { imageUrl: options.imageUrl } : {}),
   };
 
   return db.transaction(async (tx) => {
@@ -188,6 +195,8 @@ export async function getRecipe(
     pairsWith: row.pairsWith,
     source: row.source,
     sourceUrl: row.sourceUrl,
+    imageUrl: row.imageUrl,
+    photoAt: row.photoAt,
     status: row.status,
     notes: row.notes,
     archivedAt: row.archivedAt,
@@ -255,6 +264,8 @@ export async function listRecipes(
       healthCategory: recipe.healthCategory,
       seasonFit: recipe.seasonFit,
       status: recipe.status,
+      imageUrl: recipe.imageUrl,
+      photoAt: recipe.photoAt,
     })
     .from(recipe)
     .where(and(...conditions))
@@ -319,4 +330,64 @@ export async function similarRecipes(db: Database, id: string, title: string): P
     title,
     all.filter((r) => r.id !== id),
   );
+}
+
+/** Saves the family's own photo of a recipe, replacing any earlier one. */
+export async function saveRecipePhoto(db: Database, recipeId: string, photo: { contentType: string; data: string }) {
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(recipePhoto)
+      .values({ recipeId, ...photo })
+      .onConflictDoUpdate({ target: recipePhoto.recipeId, set: { ...photo, updatedAt: new Date() } });
+    // Not an edit to the recipe itself, so leave updatedAt alone.
+    await tx
+      .update(recipe)
+      .set({ photoAt: new Date(), updatedAt: sql`${recipe.updatedAt}` as unknown as Date })
+      .where(eq(recipe.id, recipeId));
+  });
+}
+
+export async function removeRecipePhoto(db: Database, recipeId: string) {
+  await db.transaction(async (tx) => {
+    await tx.delete(recipePhoto).where(eq(recipePhoto.recipeId, recipeId));
+    await tx
+      .update(recipe)
+      .set({ photoAt: null, updatedAt: sql`${recipe.updatedAt}` as unknown as Date })
+      .where(eq(recipe.id, recipeId));
+  });
+}
+
+export async function getRecipePhoto(db: Database, recipeId: string) {
+  const [row] = await db.select().from(recipePhoto).where(eq(recipePhoto.recipeId, recipeId)).limit(1);
+  return row ?? null;
+}
+
+/** Sets (or clears) the picture from the source site, without touching anything else. */
+export async function setRecipeImageUrl(db: Database, recipeId: string, imageUrl: string | null) {
+  await db
+    .update(recipe)
+    .set({ imageUrl, updatedAt: sql`${recipe.updatedAt}` as unknown as Date })
+    .where(eq(recipe.id, recipeId));
+}
+
+/** "https://www.allrecipes.com/recipe/123/x/?utm=y#z" → "allrecipes.com/recipe/123/x", for matching a page sent twice. */
+export function sameSourceKey(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** A recipe already imported from the same page, if any. */
+export async function findBySourceUrl(db: Database, url: string): Promise<{ id: string; slug: string; imageUrl: string | null } | null> {
+  const key = sameSourceKey(url);
+  if (!key) return null;
+  const rows = await db
+    .select({ id: recipe.id, slug: recipe.slug, imageUrl: recipe.imageUrl, sourceUrl: recipe.sourceUrl })
+    .from(recipe)
+    .where(and(isNotNull(recipe.sourceUrl), isNull(recipe.archivedAt)));
+  const found = rows.find((r) => r.sourceUrl && sameSourceKey(r.sourceUrl) === key);
+  return found ? { id: found.id, slug: found.slug, imageUrl: found.imageUrl } : null;
 }

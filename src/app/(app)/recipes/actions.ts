@@ -10,7 +10,18 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { recipe as recipeTable } from "@/db/schema";
 import { recipeInputSchema, type RecipeInput } from "@/lib/recipes/schema";
-import { deleteRecipe, getRecipe, saveRecipe, setRecipeArchived, slugify, uniqueSlug } from "@/lib/recipes/store";
+import {
+  deleteRecipe,
+  getRecipe,
+  removeRecipePhoto,
+  saveRecipe,
+  saveRecipePhoto,
+  setRecipeArchived,
+  setRecipeImageUrl,
+  slugify,
+  uniqueSlug,
+} from "@/lib/recipes/store";
+import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
 import { requireActingMember, requireParentMember } from "@/lib/session";
 import { z } from "zod";
 import { loadFamilyBrief } from "@/lib/ai/brief";
@@ -211,4 +222,56 @@ export async function askRecipeQuestion(
     console.error("Recipe question failed", error);
     return { error: friendlyAiError(error) };
   }
+}
+
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_PHOTO_BYTES = 900 * 1024;
+
+/** Saves a photo the family took. The phone shrinks it first. */
+export async function uploadRecipePhotoAction(recipeId: string, form: FormData): Promise<{ error: string } | void> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown recipe." };
+  const file = form.get("photo");
+  if (!(file instanceof File) || file.size === 0) return { error: "Pick a photo first." };
+  if (!PHOTO_TYPES.includes(file.type)) return { error: "Photos need to be JPEG, PNG or WebP." };
+  if (file.size > MAX_PHOTO_BYTES) return { error: "That photo is too big. Try a different one." };
+  const found = await getRecipe(db, { id: recipeId });
+  if (!found) return { error: "That recipe is gone." };
+  await saveRecipePhoto(db, recipeId, {
+    contentType: file.type,
+    data: Buffer.from(await file.arrayBuffer()).toString("base64"),
+  });
+  revalidatePath("/", "layout");
+}
+
+/** Takes the picture off: the family's photo if there is one, otherwise the source site's. */
+export async function removeRecipePictureAction(recipeId: string) {
+  await requireParentMember();
+  if (!z.uuid().safeParse(recipeId).success) return;
+  const found = await getRecipe(db, { id: recipeId });
+  if (!found) return;
+  if (found.photoAt) await removeRecipePhoto(db, recipeId);
+  else await setRecipeImageUrl(db, recipeId, null);
+  revalidatePath("/", "layout");
+}
+
+/** Fetches the picture from the page a recipe came from. */
+export async function findSourcePictureAction(recipeId: string): Promise<{ error: string } | void> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown recipe." };
+  const found = await getRecipe(db, { id: recipeId });
+  if (!found?.sourceUrl) return { error: "This recipe didn't come from a web page." };
+  try {
+    const page = await fetchRecipePage(found.sourceUrl);
+    if (!page.image) return { error: "That page doesn't have a picture to use. Add your own photo instead." };
+    await setRecipeImageUrl(db, recipeId, page.image);
+  } catch (error) {
+    if (error instanceof PageFetchError && /allrecipes\.com/i.test(found.sourceUrl)) {
+      return {
+        error: "Allrecipes won't let the app fetch it. Open the recipe on Allrecipes and tap your “Send to Cruz Meals” button; it'll add the picture here.",
+      };
+    }
+    return { error: error instanceof PageFetchError ? error.message : "Couldn't reach that page. Try again later." };
+  }
+  revalidatePath("/", "layout");
 }

@@ -9,6 +9,8 @@ import { servingsToMake } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
 import { requireActingMember } from "@/lib/session";
 import { PrintControls } from "./print-controls";
+import { recipePictureSrc } from "@/lib/recipes/picture";
+import { RecipePicture } from "@/components/recipe-picture";
 
 export const metadata = { title: "Print recipe" };
 
@@ -32,12 +34,15 @@ export default async function PrintRecipePage({
   return (
     <div className="mx-auto max-w-3xl bg-surface p-6 print:max-w-none print:p-0">
       <PrintControls slug={recipe.slug} servings={servings} />
-      <header className="border-b-2 border-foreground pb-3">
-        <h1 className="text-3xl font-bold">{recipe.title}</h1>
-        <p className="mt-1 text-sm">
-          {servings} servings{servings !== recipe.baseServings ? ` (scaled from ${recipe.baseServings})` : ""} · {recipe.activeMinutes} min hands-on · {recipe.totalMinutes} min total ·{" "}
-          {COOK_METHOD_LABELS[recipe.method]}
-        </p>
+      <header className="flex items-start gap-4 border-b-2 border-foreground pb-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-3xl font-bold">{recipe.title}</h1>
+          <p className="mt-1 text-sm">
+            {servings} servings{servings !== recipe.baseServings ? ` (scaled from ${recipe.baseServings})` : ""} · {recipe.activeMinutes} min hands-on · {recipe.totalMinutes} min total ·{" "}
+            {COOK_METHOD_LABELS[recipe.method]}
+          </p>
+        </div>
+        <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="h-28 w-40 shrink-0 rounded-xl" />
       </header>
 
       <div className="mt-4 grid grid-cols-[2fr_3fr] gap-6">
@@ -108,6 +113,11 @@ export default async function PrintRecipePage({
           {recipe.notes ? (
             <p className="mt-3 whitespace-pre-line text-xs">
               <strong>Notes:</strong> {recipe.notes}
+            </p>
+          ) : null}
+          {recipe.sourceUrl ? (
+            <p className="mt-3 break-all text-xs">
+              <strong>Original:</strong> {recipe.sourceUrl}
             </p>
           ) : null}
         </section>

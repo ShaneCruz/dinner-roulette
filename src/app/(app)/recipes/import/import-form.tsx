@@ -113,13 +113,15 @@ export function ImportForm({ humor, initialMode }: { humor: Tone; initialMode?: 
     form.set("tweaks", tweaks);
     try {
       const response = await fetch("/api/recipes/import", { method: "POST", body: form });
-      const data = (await response.json().catch(() => ({}))) as { slug?: string; error?: string };
+      const data = (await response.json().catch(() => ({}))) as { slug?: string; error?: string; existing?: boolean; sent?: string };
       if (!response.ok || !data.slug) {
         setError(data.error ?? "Something went wrong. Try again.");
         setBusy(false);
         return;
       }
-      router.push(`/recipes/${data.slug}/edit?imported=1`);
+      // Already in the recipe box: go to it rather than a second copy.
+      if (data.existing) router.push(`/recipes/${data.slug}?sent=${data.sent ?? "same"}`);
+      else router.push(`/recipes/${data.slug}/edit?imported=1`);
     } catch {
       setError("Lost the connection. Check your signal and try again.");
       setBusy(false);

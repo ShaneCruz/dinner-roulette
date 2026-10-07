@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PageFetchError, extractJsonLdRecipe, fetchRecipePage, htmlToText } from "./fetch-page";
+import { PageFetchError, extractJsonLdRecipe, fetchRecipePage, htmlToText, imageFromJsonLd, ogImage } from "./fetch-page";
 
 describe("extractJsonLdRecipe", () => {
   it("finds a Recipe inside an @graph", () => {
@@ -48,5 +48,22 @@ describe("source ratings", () => {
     const text = jsonLdToText({ name: "Lasagna", review: [{ a: 1 }], aggregateRating: { ratingValue: 5 } });
     expect(text).toContain("Lasagna");
     expect(text).not.toContain("review");
+  });
+});
+
+describe("recipe pictures", () => {
+  it("reads every shape schema.org uses for an image", () => {
+    expect(imageFromJsonLd({ image: "https://a.com/1.jpg" })).toBe("https://a.com/1.jpg");
+    expect(imageFromJsonLd({ image: ["https://a.com/big.jpg", "https://a.com/small.jpg"] })).toBe("https://a.com/big.jpg");
+    expect(imageFromJsonLd({ image: { "@type": "ImageObject", url: "https://a.com/2.jpg", width: 1500 } })).toBe("https://a.com/2.jpg");
+    expect(imageFromJsonLd({ image: [{ url: "https://a.com/3.jpg" }] })).toBe("https://a.com/3.jpg");
+    expect(imageFromJsonLd({ image: "http://a.com/4.jpg" })).toBe("https://a.com/4.jpg");
+    expect(imageFromJsonLd({ image: "javascript:alert(1)" })).toBeNull();
+    expect(imageFromJsonLd({})).toBeNull();
+  });
+
+  it("falls back to the share picture", () => {
+    expect(ogImage('<meta property="og:image" content="https://a.com/og.jpg?w=1&amp;h=2">')).toBe("https://a.com/og.jpg?w=1&h=2");
+    expect(ogImage("<meta name=\"description\" content=\"x\">")).toBeNull();
   });
 });

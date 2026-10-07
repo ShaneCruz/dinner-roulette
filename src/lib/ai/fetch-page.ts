@@ -76,6 +76,32 @@ export function ratingFromJsonLd(recipe: Record<string, unknown>): { rating: num
   };
 }
 
+function httpsUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^https?:\/\//i.test(trimmed) && trimmed.length <= 1000 ? trimmed.replace(/^http:/i, "https:") : null;
+}
+
+/**
+ * The recipe's picture from schema.org data, which comes as a URL, a list of
+ * them, an ImageObject, or a list of those. Sites list the biggest first.
+ */
+export function imageFromJsonLd(recipe: Record<string, unknown>): string | null {
+  const image = recipe.image;
+  for (const item of Array.isArray(image) ? image : [image]) {
+    const url = httpsUrl(item) ?? (item && typeof item === "object" ? httpsUrl((item as { url?: unknown }).url) : null);
+    if (url) return url;
+  }
+  return null;
+}
+
+/** The page's share picture (og:image), for sites without recipe data. */
+export function ogImage(html: string): string | null {
+  const tag = html.match(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]*>/i)?.[0];
+  const content = tag?.match(/content=["']([^"']+)["']/i)?.[1];
+  return httpsUrl(content?.replace(/&amp;/g, "&"));
+}
+
 /** Turns a schema.org Recipe into compact text for the importer (no reviews, images or video). */
 export function jsonLdToText(recipe: Record<string, unknown>): string {
   const { review: _r, aggregateRating: _a, image: _i, video: _v, ...rest } = recipe;
@@ -103,7 +129,7 @@ export function htmlToText(html: string): string {
 
 export async function fetchRecipePage(
   rawUrl: string,
-): Promise<{ text: string; url: string; rating: { rating: number | null; count: number | null } }> {
+): Promise<{ text: string; url: string; rating: { rating: number | null; count: number | null }; image: string | null }> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -143,8 +169,11 @@ export async function fetchRecipePage(
   const html = new TextDecoder().decode(buffer);
 
   const jsonLd = extractJsonLdRecipe(html);
-  if (jsonLd) return { text: jsonLdToText(jsonLd), url: response.url, rating: ratingFromJsonLd(jsonLd) };
+  if (jsonLd) {
+    const image = imageFromJsonLd(jsonLd) ?? ogImage(html);
+    return { text: jsonLdToText(jsonLd), url: response.url, rating: ratingFromJsonLd(jsonLd), image };
+  }
   const text = htmlToText(html);
   if (text.length < 200) throw new PageFetchError("Couldn't find a recipe on that page. Try pasting the text instead.");
-  return { text: text.slice(0, MAX_TEXT), url: response.url, rating: { rating: null, count: null } };
+  return { text: text.slice(0, MAX_TEXT), url: response.url, rating: { rating: null, count: null }, image: ogImage(html) };
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Badge, Card, SpiceMeter } from "@/components/ui";
 import { COOK_METHOD_LABELS, type CookMethod } from "@/lib/recipes/schema";
 import type { RecipeSummary } from "@/lib/recipes/store";
+import { recipePictureSrc } from "@/lib/recipes/picture";
+import { RecipePicture } from "@/components/recipe-picture";
 
 const METHOD_EMOJI: Record<CookMethod, string> = {
   stovetop: "🍳",
@@ -21,9 +23,16 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
     <Link href={`/recipes/${recipe.slug}`} className="group block">
       <Card className="h-full transition group-hover:-translate-y-0.5 group-hover:shadow-md">
         <div className="flex items-start gap-3">
-          <span className="text-3xl" aria-hidden>
-            {METHOD_EMOJI[recipe.method]}
-          </span>
+          <RecipePicture
+            src={recipePictureSrc(recipe)}
+            alt=""
+            className="h-16 w-16 shrink-0 rounded-2xl bg-surface-muted"
+            fallback={
+              <span className="text-3xl" aria-hidden>
+                {METHOD_EMOJI[recipe.method]}
+              </span>
+            }
+          />
           <div className="min-w-0 flex-1">
             <h3 className="text-lg font-bold leading-tight">{recipe.title}</h3>
             <p className="mt-1 line-clamp-2 text-sm text-muted">{recipe.description}</p>

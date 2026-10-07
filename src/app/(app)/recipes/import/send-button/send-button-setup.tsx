@@ -5,9 +5,13 @@ import { Button, Card } from "@/components/ui";
 
 const noop = () => () => {};
 
-/** The bookmarklet: finds the page's schema.org Recipe and sends it to the app. */
+/**
+ * The bookmarklet: finds the page's schema.org Recipe and sends it to the
+ * app, with the address of its main picture (v:2; earlier buttons sent no
+ * picture, and the app tells people to update theirs).
+ */
 function bookmarklet(origin: string): string {
-  const code = `(()=>{const f=n=>{if(!n)return null;if(Array.isArray(n)){for(const x of n){const r=f(x);if(r)return r}return null}if(typeof n!=="object")return null;const t=n["@type"];if(t==="Recipe"||(Array.isArray(t)&&t.includes("Recipe")))return n;return n["@graph"]?f(n["@graph"]):null};let r=null;document.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{if(!r){try{r=f(JSON.parse(s.textContent))}catch(e){}}});if(!r){alert("Couldn't find a recipe on this page. Try taking screenshots instead.");return}const{review,video,image,...rest}=r;location.href="${origin}/recipes/import#send="+encodeURIComponent(JSON.stringify({url:location.href,recipe:rest}))})()`;
+  const code = `(()=>{const f=n=>{if(!n)return null;if(Array.isArray(n)){for(const x of n){const r=f(x);if(r)return r}return null}if(typeof n!=="object")return null;const t=n["@type"];if(t==="Recipe"||(Array.isArray(t)&&t.includes("Recipe")))return n;return n["@graph"]?f(n["@graph"]):null};let r=null;document.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{if(!r){try{r=f(JSON.parse(s.textContent))}catch(e){}}});if(!r){alert("Couldn't find a recipe on this page. Try taking screenshots instead.");return}const{review,video,image,...rest}=r;const one=Array.isArray(image)?image[0]:image;const pic=typeof one==="string"?one:one&&one.url;location.href="${origin}/recipes/import#send="+encodeURIComponent(JSON.stringify({v:2,url:location.href,image:pic||null,recipe:rest}))})()`;
   return `javascript:${code}`;
 }
 

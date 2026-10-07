@@ -10,6 +10,8 @@ import { formatCount } from "@/components/source-rating";
 import { IngredientLine } from "../recipes/[slug]/recipe-view";
 import { scaleIngredient } from "@/lib/recipes/scale";
 import { SideSearch } from "./side-search";
+import { RecipePicture } from "@/components/recipe-picture";
+import { recipePictureSrc } from "@/lib/recipes/picture";
 
 export function RecipePicker({
   night,
@@ -289,6 +291,7 @@ function Preview({
         {preview && "error" in preview ? <p className="py-8 text-center text-muted">{preview.error}</p> : null}
         {recipe ? (
           <>
+            <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="aspect-[16/9] w-full rounded-2xl bg-surface-muted" />
             <div>
               <p className="text-lg font-bold leading-tight">{recipe.title}</p>
               <p className="mt-1 text-sm text-muted">{recipe.description}</p>

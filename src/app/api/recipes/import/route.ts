@@ -2,11 +2,11 @@ import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { loadFamilyBrief } from "@/lib/ai/brief";
-import { PageFetchError, fetchRecipePage, jsonLdToText, ratingFromJsonLd, siteName } from "@/lib/ai/fetch-page";
+import { PageFetchError, fetchRecipePage, imageFromJsonLd, jsonLdToText, ratingFromJsonLd, siteName } from "@/lib/ai/fetch-page";
 import { generateRecipe, importRecipe, inventNewMeal, normalizeAiRecipe, parseRatingText, type ImportSource } from "@/lib/ai/recipes";
 import { saveDraftRecipe } from "@/lib/ai/save";
 import { ensureNutrition } from "@/lib/nutrition-store";
-import { getRecipe, listRecipes, type SourceRating } from "@/lib/recipes/store";
+import { findBySourceUrl, getRecipe, listRecipes, setRecipeImageUrl, type SourceRating } from "@/lib/recipes/store";
 import { season } from "@/lib/suggest/engine";
 import { todayIn } from "@/lib/presence";
 import { getActingMember, getFamilySettings, getParentSession } from "@/lib/session";
@@ -20,6 +20,24 @@ const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
 function fail(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
+}
+
+/**
+ * The same page sent or linked again: no second copy, just its picture
+ * added if it was missing (recipes saved before pictures were kept).
+ * `sent` tells the recipe page what happened.
+ */
+async function alreadyHave(sourceUrl: string, image: string | null, oldButton: boolean) {
+  const existing = await findBySourceUrl(db, sourceUrl);
+  if (!existing) return null;
+  let sent = "same";
+  if (!existing.imageUrl && image) {
+    await setRecipeImageUrl(db, existing.id, image);
+    sent = "photo";
+  } else if (!existing.imageUrl && oldButton) {
+    sent = "old-button";
+  }
+  return NextResponse.json({ slug: existing.slug, existing: true, sent });
 }
 
 export async function POST(request: Request) {
@@ -42,6 +60,7 @@ export async function POST(request: Request) {
     const sideSlugs = brief.sides.map((s) => s.slug);
     let result;
     let sourceUrl: string | null = null;
+    let imageUrl: string | null = null;
     let source: "ai" | "import" = "import";
     let rating: SourceRating | null = null;
 
@@ -69,12 +88,15 @@ export async function POST(request: Request) {
       if (!url) return fail("Paste a link first.");
       const page = await fetchRecipePage(url);
       sourceUrl = page.url;
+      imageUrl = page.image;
+      const existing = await alreadyHave(page.url, page.image, false);
+      if (existing) return existing;
       if (page.rating.rating || page.rating.count) rating = { site: siteName(page.url), ...page.rating };
       result = await importRecipe({ kind: "text", text: page.text, sourceUrl: page.url }, brief, tweaks);
     } else if (mode === "sent") {
       // Sent from the "Send to Cruz Meals" button on a recipe site: the
       // page's own structured data, read in the family's browser.
-      let payload: { url?: unknown; recipe?: unknown };
+      let payload: { url?: unknown; recipe?: unknown; image?: unknown; v?: unknown };
       try {
         payload = JSON.parse(String(form.get("payload") ?? "").slice(0, 400_000));
       } catch {
@@ -84,6 +106,12 @@ export async function POST(request: Request) {
       const pageUrl = typeof payload.url === "string" && /^https?:\/\//.test(payload.url) ? payload.url.slice(0, 500) : null;
       if (!ld) return fail("No recipe was found on that page.");
       sourceUrl = pageUrl;
+      // Buttons set up before pictures were kept strip the image before sending.
+      imageUrl = (typeof payload.image === "string" ? imageFromJsonLd({ image: payload.image }) : null) ?? imageFromJsonLd(ld);
+      if (pageUrl) {
+        const existing = await alreadyHave(pageUrl, imageUrl, payload.v === undefined);
+        if (existing) return existing;
+      }
       const found = ratingFromJsonLd(ld);
       rating = { site: pageUrl ? siteName(pageUrl) : null, ...found };
       result = await importRecipe({ kind: "text", text: jsonLdToText(ld), sourceUrl: pageUrl ?? undefined }, brief, tweaks);
@@ -117,6 +145,7 @@ export async function POST(request: Request) {
     const slug = await saveDraftRecipe(db, normalized.recipe, {
       source,
       sourceUrl,
+      imageUrl,
       notes: normalized.notes,
       warnings: normalized.warnings,
       createdByMemberId: acting.id,

@@ -282,6 +282,10 @@ export const recipe = pgTable(
     sourceRatingCount: integer("source_rating_count"),
     source: recipeSource("source").notNull(),
     sourceUrl: text("source_url"),
+    /** The picture on the site it came from (linked, not copied) */
+    imageUrl: text("image_url"),
+    /** When the family's own photo was added (it lives in recipe_photo); null if none */
+    photoAt: timestamp("photo_at", { withTimezone: true }),
     status: recipeStatus("status").notNull().default("approved"),
     notes: text("notes"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -317,6 +321,20 @@ export const recipeIngredient = pgTable(
     index("recipe_ingredient_name_idx").on(t.name),
   ],
 );
+
+/**
+ * A photo the family took of a recipe, kept apart from the recipe row so the
+ * many queries that read recipes don't drag image bytes along.
+ */
+export const recipePhoto = pgTable("recipe_photo", {
+  recipeId: uuid("recipe_id")
+    .primaryKey()
+    .references(() => recipe.id, { onDelete: "cascade" }),
+  contentType: text("content_type").notNull(),
+  /** Base64; photos are shrunk on the phone to well under a megabyte first */
+  data: text("data").notNull(),
+  ...timestamps,
+});
 
 export const recipeVariant = pgTable(
   "recipe_variant",

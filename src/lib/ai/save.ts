@@ -13,6 +13,7 @@ export async function saveDraftRecipe(
   options: {
     source: "ai" | "import";
     sourceUrl?: string | null;
+    imageUrl?: string | null;
     notes: string | null;
     warnings: string[];
     createdByMemberId: string;
@@ -27,6 +28,7 @@ export async function saveDraftRecipe(
     {
       source: options.source,
       sourceUrl: options.sourceUrl ?? null,
+      imageUrl: options.imageUrl ?? null,
       status: "draft",
       notes: [options.notes, check].filter(Boolean).join("\n\n") || null,
       createdByMemberId: options.createdByMemberId,

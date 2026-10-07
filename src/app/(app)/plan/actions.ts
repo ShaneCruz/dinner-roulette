@@ -144,7 +144,18 @@ export async function anotherIdeaAction(date: string): Promise<{ error: string }
 
 export type RecipePreview = Pick<
   StoredRecipe,
-  "id" | "slug" | "title" | "description" | "activeMinutes" | "totalMinutes" | "baseServings" | "ingredients" | "steps" | "notes"
+  | "id"
+  | "slug"
+  | "title"
+  | "description"
+  | "activeMinutes"
+  | "totalMinutes"
+  | "baseServings"
+  | "ingredients"
+  | "steps"
+  | "notes"
+  | "imageUrl"
+  | "photoAt"
 >;
 
 /** A dinner's ingredients and steps, to read before picking it. */
@@ -153,8 +164,10 @@ export async function recipePreviewAction(recipeId: string): Promise<{ error: st
   if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown dinner." };
   const found = await getRecipe(db, { id: recipeId });
   if (!found) return { error: "That recipe is gone." };
-  const { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes } = found;
-  return { recipe: { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes } };
+  const { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes, imageUrl, photoAt } = found;
+  return {
+    recipe: { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes, imageUrl, photoAt },
+  };
 }
 
 export type SideIdea = {
