@@ -30,14 +30,14 @@ const EVERYONE: Section[] = [
 const PARENTS: Section[] = [
   {
     emoji: "🗓️",
-    title: "Autopilot plans next week",
-    body: "Friday morning the open nights fill themselves, around who's home, each night's time budget, ratings, the weather and whose turn it is. Anything you picked by hand stays. You get a notification; change whatever you like.",
+    title: "Plan as much as you want",
+    body: "Nights stay blank until you pick a dinner. “Suggest dinners” fills your usual number of cooking nights (three, unless you change it in Settings), spaced out so the leftovers get a night, around who's home, each night's time budget, ratings, the weather and whose turn it is. Anything you picked by hand stays. Autopilot can do it every week for you; it's off unless you turn it on.",
     link: { href: "/plan", label: "This week's plan" },
   },
   {
     emoji: "🛒",
     title: "The grocery list builds itself",
-    body: "Every planned dinner adds its ingredients, scaled to who's eating and sorted by aisle. It opens in the store with no signal, and two people can split it and see each other's check-offs.",
+    body: "Every planned dinner adds its ingredients, scaled to who's eating plus your usual leftovers, and sorted by aisle. It opens in the store with no signal, and two people can split it and see each other's check-offs.",
     link: { href: "/grocery", label: "Grocery list" },
   },
   {
@@ -109,7 +109,7 @@ export default async function HelpPage() {
       <Card className="bg-basil-soft">
         <p className="font-bold">The short version</p>
         <p className="mt-1 text-sm">
-          The week gets planned (by autopilot on Friday, or by the family on Sunday) → the grocery list builds itself →
+          You plan the dinners you&apos;ll cook (pick them, ask for suggestions, or vote on Sunday) → the grocery list builds itself →
           cooking mode walks you through dinner → everyone rates it → next week&apos;s suggestions get better.
         </p>
       </Card>

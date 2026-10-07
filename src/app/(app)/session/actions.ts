@@ -71,12 +71,13 @@ export async function startOverAction(weekStart: string, memberId: string): Prom
   return { ok: true };
 }
 
-/** Re-plans the week's open (and engine-picked) nights using everyone's votes. */
+/** Re-plans the week's cooking nights (open, or engine-picked) using everyone's votes. */
 export async function buildWeekAction(weekStart: string): Promise<{ error: string } | { filled: number }> {
   const { settings } = await requireParentMember();
   if (!dateSchema.safeParse(weekStart).success) return { error: "Unknown week." };
   const filled = await applySuggestions(db, weekStart, todayIn(settings.timezone), settings.weekStartsOn, {
     replaceSuggested: true,
+    cookNights: settings.cookNightsPerWeek,
   });
   revalidatePath("/", "layout");
   return { filled };

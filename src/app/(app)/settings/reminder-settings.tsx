@@ -29,7 +29,7 @@ export function ReminderSettings({
       </Field>
       <div className="space-y-2">
         <Toggle
-          label="Autopilot: plan next week's open nights automatically"
+          label="Autopilot: suggest next week's dinners automatically"
           checked={values.autopilotEnabled}
           onChange={(autopilotEnabled) => setValues({ ...values, autopilotEnabled })}
         />
@@ -47,7 +47,7 @@ export function ReminderSettings({
                 </option>
               ))}
             </select>
-            morning. Votes from the Sunday session and dinners you picked are kept.
+            morning, your usual number of cooking nights. Votes from the Sunday session and dinners you picked are kept.
           </label>
         ) : null}
       </div>

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Badge, Button, Card, cx } from "@/components/ui";
 import { formatAmount, scaleIngredient } from "@/lib/recipes/scale";
 import { askForNotifications, beep, notify, unlockAudio } from "@/lib/timer-alarm";
+import { formatDay } from "@/lib/plan/week";
 import { VARIANT_KIND_LABELS, type IngredientInput, type Recipe, type VariantInput } from "@/lib/recipes/schema";
 
 type ViewVariant = VariantInput & { forNames: string[] };
@@ -14,13 +15,19 @@ export function RecipeView({
   variants,
   heatFor,
   sides,
+  startServings,
+  plannedFor,
 }: {
   recipe: Recipe;
   variants: ViewVariant[];
   heatFor: string[];
   sides: { slug: string; title: string }[];
+  /** The batch the family makes: the planned night's, or their usual */
+  startServings: number;
+  /** The night it's planned for, if it is */
+  plannedFor: string | null;
 }) {
-  const [servings, setServings] = useState(recipe.baseServings);
+  const [servings, setServings] = useState(startServings);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
   const factor = servings / recipe.baseServings;
@@ -64,9 +71,17 @@ export function RecipeView({
               </Button>
             </div>
           </div>
-          {servings > recipe.baseServings ? (
-            <p className="mt-2 text-xs text-basil">Extra for leftovers. Nice planning.</p>
-          ) : null}
+          <p className="no-print mt-2 flex flex-wrap gap-x-1.5 text-xs text-muted">
+            {servings === startServings ? (
+              <span>{plannedFor ? `As planned for ${formatDay(plannedFor)}.` : "Your usual batch."}</span>
+            ) : null}
+            {servings !== recipe.baseServings ? <span>The recipe makes {recipe.baseServings}; amounts are scaled.</span> : null}
+            {servings !== startServings ? (
+              <Link href={`/recipes/${recipe.slug}/print?servings=${servings}`} className="font-semibold text-tomato">
+                🖨️ Print {servings} servings
+              </Link>
+            ) : null}
+          </p>
           <ul className="mt-4 space-y-2">
             {recipe.ingredients.map((ingredient, index) => (
               <li key={index}>

@@ -74,6 +74,30 @@ export function SettingsForm({
 
       <Card className="space-y-4">
         <h2 className="text-xl font-bold">Planning</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Servings we usually make"
+            hint="With leftovers, when everyone's home. Recipes, printouts and the grocery list scale to it. Blank means one per person."
+          >
+            <input
+              className={inputClass}
+              type="number"
+              min={1}
+              max={40}
+              placeholder="One per person"
+              value={settings.usualServings ?? ""}
+              onChange={(e) =>
+                setSettings({ ...settings, usualServings: e.target.value === "" ? null : Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field
+            label="Dinners we cook in a week"
+            hint="“Suggest dinners” picks this many and leaves the other nights for leftovers, takeout and the like."
+          >
+            <input className={inputClass} type="number" min={1} max={7} {...number("cookNightsPerWeek")} />
+          </Field>
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Weeknight hands-on minutes">
             <input className={inputClass} type="number" min={10} max={120} {...number("weeknightActiveMinutes")} />

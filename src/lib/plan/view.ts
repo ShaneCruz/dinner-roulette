@@ -1,10 +1,10 @@
 import { db } from "@/db";
-import { recipe as recipeTable, restaurant, type Nutrition } from "@/db/schema";
+import { familySettings, recipe as recipeTable, restaurant, type Nutrition } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { presenceOn } from "@/lib/presence";
 import { assignTurns, rankForNight, type Weather } from "@/lib/suggest/engine";
 import { loadEngineInputs } from "@/lib/suggest/load";
-import { eatersFor, listBumped, loadEaterContext, loadMeals, servingsFor } from "./store";
+import { eatersFor, listBumped, loadEaterContext, loadMeals, servingsFor, servingsRule } from "./store";
 import { defaultTimeBudget, weekDates, type NightType, type TimeBudget } from "./week";
 
 export type NightView = {
@@ -52,12 +52,14 @@ export type NightRanking = { recipeId: string; score: number; reason: string | n
 /** Everything the week board needs, for the week starting `weekStart`. */
 export async function loadWeekView(weekStart: string) {
   const dates = weekDates(weekStart);
-  const [meals, eaterContext, engine, bumped] = await Promise.all([
+  const [meals, eaterContext, engine, bumped, [settings]] = await Promise.all([
     loadMeals(db, dates[0], dates[6]),
     loadEaterContext(db, dates[0], dates[6]),
     loadEngineInputs(db, weekStart),
     listBumped(db),
+    db.select({ usualServings: familySettings.usualServings }).from(familySettings).limit(1),
   ]);
+  const rule = servingsRule(eaterContext, settings?.usualServings ?? null);
 
   const turns = assignTurns(
     engine.nights.map((n) => ({ ...n })),
@@ -80,7 +82,7 @@ export async function loadWeekView(weekStart: string) {
       eaterIds: meal?.eaterIds ?? null,
       eatingIds: eating.map((m) => m.id),
       homeIds: home.map((m) => m.id),
-      servings: servingsFor({ servings: meal?.servings ?? null }, eating.length),
+      servings: servingsFor({ servings: meal?.servings ?? null }, eating.length, rule),
       servingsOverridden: meal?.servings != null,
       notes: meal?.notes ?? null,
       favoredMemberId: meal?.favoredMemberId ?? turns.get(date)?.memberId ?? null,

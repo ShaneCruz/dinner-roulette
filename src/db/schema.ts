@@ -121,8 +121,16 @@ export const familySettings = pgTable(
     weekStartsOn: integer("week_starts_on").notNull().default(0),
     /** When dinner is usually on the table, "HH:MM" in the family's timezone */
     dinnerTime: text("dinner_time").notNull().default("18:00"),
+    /**
+     * Servings to make when the whole household is eating, leftovers
+     * included; null means one per person. The extra over the household
+     * carries over to nights when someone's away.
+     */
+    usualServings: integer("usual_servings"),
+    /** Dinners actually cooked in a typical week; the rest is leftovers, takeout and so on */
+    cookNightsPerWeek: integer("cook_nights_per_week").notNull().default(3),
     /** Plan next week automatically on autopilotDay (0 = Sunday … 6 = Saturday) */
-    autopilotEnabled: boolean("autopilot_enabled").notNull().default(true),
+    autopilotEnabled: boolean("autopilot_enabled").notNull().default(false),
     autopilotDay: integer("autopilot_day").notNull().default(5),
     reminders: jsonb("reminders").$type<ReminderPrefs>().notNull().default(DEFAULT_REMINDERS),
     /** Most the app may spend on AI per week, in cents; 0 turns AI off */

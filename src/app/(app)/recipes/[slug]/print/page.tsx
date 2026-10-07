@@ -5,6 +5,8 @@ import { heatSeekers, variantAudience } from "@/lib/recipes/audience";
 import { formatAmount, scaleIngredient } from "@/lib/recipes/scale";
 import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
 import { getRecipe } from "@/lib/recipes/store";
+import { servingsToMake } from "@/lib/plan/store";
+import { todayIn } from "@/lib/presence";
 import { requireActingMember } from "@/lib/session";
 import { PrintControls } from "./print-controls";
 
@@ -14,12 +16,15 @@ export default async function PrintRecipePage({
   params,
   searchParams,
 }: PageProps<"/recipes/[slug]/print">) {
-  await requireActingMember();
+  const { settings } = await requireActingMember();
   const recipe = await getRecipe(db, { slug: (await params).slug });
   if (!recipe) notFound();
 
   const requested = Number((await searchParams).servings);
-  const servings = Number.isInteger(requested) && requested > 0 && requested <= 40 ? requested : recipe.baseServings;
+  const servings =
+    Number.isInteger(requested) && requested > 0 && requested <= 40
+      ? requested
+      : (await servingsToMake(db, recipe.id, todayIn(settings.timezone), settings.usualServings)).servings;
   const factor = servings / recipe.baseServings;
   const audience = await loadAudience();
   const heatFor = heatSeekers(audience).map((m) => m.name);
@@ -30,7 +35,7 @@ export default async function PrintRecipePage({
       <header className="border-b-2 border-foreground pb-3">
         <h1 className="text-3xl font-bold">{recipe.title}</h1>
         <p className="mt-1 text-sm">
-          {servings} servings · {recipe.activeMinutes} min hands-on · {recipe.totalMinutes} min total ·{" "}
+          {servings} servings{servings !== recipe.baseServings ? ` (scaled from ${recipe.baseServings})` : ""} · {recipe.activeMinutes} min hands-on · {recipe.totalMinutes} min total ·{" "}
           {COOK_METHOD_LABELS[recipe.method]}
         </p>
       </header>

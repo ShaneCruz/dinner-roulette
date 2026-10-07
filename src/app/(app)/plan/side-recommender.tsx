@@ -3,27 +3,32 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { addSideAction, recommendSidesAction, removeSideAction, type SideIdea } from "./actions";
+import { SideSearch } from "./side-search";
 
 const THINKING = ["Thinking about what goes with it…", "Checking your sides…", "Picturing the plate…"];
 const WRITING = ["Writing the recipe…", "Adding it to your sides…", "Updating the grocery list…"];
 
 /**
- * "Recommend sides" for a planned dinner: the family's own sides when they
- * fit, or easy new ideas that get written up and saved when chosen.
+ * Sides for a planned dinner: type one (from the family's sides, or a new
+ * one by name), or ask for ideas that go with it. New sides get written up
+ * and saved when chosen.
  */
 export function SideRecommender({
   date,
   sides,
+  allSides,
   canEdit,
 }: {
   date: string;
   sides: { id: string; slug: string; title: string }[];
+  /** Every side in the recipe box, for typing one in */
+  allSides: { id: string; title: string }[];
   canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [ideas, setIdeas] = useState<SideIdea[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [adding, setAdding] = useState<string | null>(null);
+  const [adding, setAdding] = useState<{ title: string; isNew: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [line, setLine] = useState(0);
@@ -35,7 +40,6 @@ export function SideRecommender({
   }, [loading, adding]);
 
   async function load() {
-    setOpen(true);
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -50,9 +54,10 @@ export function SideRecommender({
     }
   }
 
-  async function add(idea: SideIdea) {
-    setAdding(idea.title);
+  async function add(idea: Pick<SideIdea, "existingId" | "title">) {
+    setAdding({ title: idea.title, isNew: !idea.existingId });
     setError(null);
+    setNotice(null);
     try {
       const result = await addSideAction(date, { existingId: idea.existingId, title: idea.title });
       if ("error" in result) setError(result.error);
@@ -94,11 +99,28 @@ export function SideRecommender({
         open ? (
           <div className="space-y-2 rounded-2xl border border-basil/30 bg-basil-soft/50 p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-bold">🥗 Sides that go with it</p>
+              <p className="text-sm font-bold">🥗 Add a side</p>
               <button type="button" className="text-xs font-semibold text-muted" onClick={() => setOpen(false)}>
                 Close
               </button>
             </div>
+            <SideSearch
+              sides={allSides.filter((s) => !sides.some((on) => on.id === s.id))}
+              disabled={Boolean(adding)}
+              autoFocus
+              onPick={(id) => add({ existingId: id, title: allSides.find((s) => s.id === id)?.title ?? "" })}
+              onAddNew={(title) => add({ existingId: null, title })}
+            />
+            {adding && !ideas?.some((i) => i.title === adding.title) ? (
+              <p className="text-sm text-muted">
+                Adding {adding.title}…{adding.isNew ? ` ${WRITING[line % WRITING.length]}` : ""}
+              </p>
+            ) : null}
+            {!ideas && !loading ? (
+              <button type="button" className="text-sm font-semibold text-plum" onClick={load} disabled={Boolean(adding)}>
+                ✨ Or get ideas that go with it
+              </button>
+            ) : null}
             {loading ? <p className="text-sm text-muted">{THINKING[line % THINKING.length]}</p> : null}
             {notice ? <p className="text-sm font-semibold text-basil">{notice}</p> : null}
             {error ? <p className="text-sm font-semibold text-tomato-strong">{error}</p> : null}
@@ -122,7 +144,7 @@ export function SideRecommender({
                       onClick={() => add(idea)}
                       className="shrink-0 rounded-full bg-basil px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
                     >
-                      {adding === idea.title ? (idea.existingId ? "Adding…" : WRITING[line % WRITING.length]) : "+ Add"}
+                      {adding?.title === idea.title ? (idea.existingId ? "Adding…" : WRITING[line % WRITING.length]) : "+ Add"}
                     </button>
                   </li>
                 ))}
@@ -138,8 +160,15 @@ export function SideRecommender({
             ) : null}
           </div>
         ) : (
-          <button type="button" onClick={load} className="text-sm font-semibold text-basil">
-            🥗 {sides.length ? "More sides" : "Recommend sides"}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setNotice(null);
+            }}
+            className="text-sm font-semibold text-basil"
+          >
+            🥗 {sides.length ? "Add another side" : "Add a side"}
           </button>
         )
       ) : null}

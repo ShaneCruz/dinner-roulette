@@ -13,6 +13,8 @@ import {
   SEASON_LABELS,
 } from "@/lib/recipes/schema";
 import { getRecipe } from "@/lib/recipes/store";
+import { servingsToMake } from "@/lib/plan/store";
+import { todayIn } from "@/lib/presence";
 import { ratingsForRecipe } from "@/lib/ratings/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { RatingsSummary } from "@/components/ratings-summary";
@@ -38,14 +40,15 @@ export async function generateMetadata({ params }: PageProps<"/recipes/[slug]">)
 }
 
 export default async function RecipePage({ params }: PageProps<"/recipes/[slug]">) {
-  const { acting } = await requireActingMember();
+  const { acting, settings } = await requireActingMember();
   const recipe = await getRecipe(db, { slug: (await params).slug });
   if (!recipe) notFound();
 
-  const [audience, ratings, members] = await Promise.all([
+  const [audience, ratings, members, batch] = await Promise.all([
     loadAudience(),
     ratingsForRecipe(db, recipe.id),
     getActiveMembers(),
+    servingsToMake(db, recipe.id, todayIn(settings.timezone), settings.usualServings),
   ]);
   const sides =
     recipe.pairsWith.length > 0
@@ -84,7 +87,7 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
             <ButtonLink href={`/cook/${recipe.slug}`} size="sm">
               👩‍🍳 Cooking mode
             </ButtonLink>
-            <ButtonLink href={`/recipes/${recipe.slug}/print`} variant="secondary" size="sm">
+            <ButtonLink href={`/recipes/${recipe.slug}/print?servings=${batch.servings}`} variant="secondary" size="sm">
               🖨️ Print
             </ButtonLink>
             {isParent ? (
@@ -179,6 +182,8 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         variants={variants}
         heatFor={heatFor}
         sides={sides}
+        startServings={batch.servings}
+        plannedFor={batch.date}
       />
 
       {aiEnabled() ? (

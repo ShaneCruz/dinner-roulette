@@ -619,8 +619,8 @@ function Results({
         <Card className="space-y-2 border-basil/40 bg-basil-soft">
           <p className="font-bold">Turn the votes into a plan</p>
           <p className="text-sm text-muted">
-            Fills the open nights (and redoes the planner&apos;s own picks) using everyone&apos;s votes, turns, prep time and
-            the rest. Dinners you chose by hand stay put. Vetoed dinners stay off.
+            Plans the week&apos;s cooking nights, up to your usual number (and redoes the planner&apos;s own picks), using
+            everyone&apos;s votes, turns, prep time and the rest. Dinners you chose by hand stay put. Vetoed dinners stay off.
           </p>
           {built !== null ? (
             <p className="font-semibold text-basil">

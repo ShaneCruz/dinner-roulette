@@ -18,7 +18,7 @@ export function PrintControls({ slug, servings }: { slug: string; servings: numb
           value={servings}
           onChange={(e) => router.replace(`/recipes/${slug}/print?servings=${e.target.value}`)}
         >
-          {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
+          {Array.from({ length: Math.max(24, servings) }, (_, i) => i + 1).map((n) => (
             <option key={n} value={n}>
               {n}
             </option>

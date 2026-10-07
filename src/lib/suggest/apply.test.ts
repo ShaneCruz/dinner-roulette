@@ -77,6 +77,30 @@ describe("applySuggestions", () => {
   });
 });
 
+describe("cooking a few nights a week", () => {
+  const NEXT = "2026-10-25";
+
+  it("only fills enough nights for the usual number of dinners, spaced out", async () => {
+    const tacos = (await getRecipe(db, { slug: "taco-night" }))!;
+    await saveNight(db, "2026-10-27", 0, { recipeId: tacos.id });
+
+    const filled = await applySuggestions(db, NEXT, NEXT, 0, { random: seededRandom(4), weather: false, cookNights: 3 });
+    expect(filled).toBe(2);
+
+    const meals = await loadMeals(db, "2026-10-25", "2026-10-31");
+    const dinners = [...meals.values()].filter((m) => m.recipeId).map((m) => m.date).sort();
+    expect(dinners).toHaveLength(3);
+    for (let i = 1; i < dinners.length; i++) {
+      const gap = (Date.parse(dinners[i]) - Date.parse(dinners[i - 1])) / 86_400_000;
+      expect(gap).toBeGreaterThan(1);
+    }
+  });
+
+  it("adds nothing once the week has its dinners", async () => {
+    expect(await applySuggestions(db, NEXT, NEXT, 0, { random: seededRandom(4), weather: false, cookNights: 3 })).toBe(0);
+  });
+});
+
 describe("ratings", () => {
   it("feed back into the engine, and track who still needs to rate", async () => {
     const tacos = (await getRecipe(db, { slug: "taco-night" }))!;

@@ -15,6 +15,7 @@ import {
   placeBumped,
   regenerateGroceryList,
   saveNight,
+  servingsFor,
   skipNight,
   swapNights,
 } from "./store";
@@ -119,5 +120,24 @@ describe("planning a week", () => {
     expect(meals.get("2026-09-24")?.recipeId).toBe(chiliId);
     expect(meals.get("2026-09-26")?.recipeId).toBe(tacosId);
     expect(meals.get("2026-09-26")?.timeBudget).toBe("hands_off");
+  });
+});
+
+describe("servings", () => {
+  it("is one per eater without a usual batch", () => {
+    expect(servingsFor({ servings: null }, 4)).toBe(4);
+    expect(servingsFor({ servings: null }, 4, { usualServings: null, householdSize: 4 })).toBe(4);
+  });
+
+  it("makes the family's usual batch, and keeps the leftovers when someone's away", () => {
+    const rule = { usualServings: 7, householdSize: 4 };
+    expect(servingsFor({ servings: null }, 4, rule)).toBe(7);
+    expect(servingsFor({ servings: null }, 3, rule)).toBe(6);
+    expect(servingsFor({ servings: null }, 5, rule)).toBe(8);
+  });
+
+  it("never goes below one per eater, and a night's own number wins", () => {
+    expect(servingsFor({ servings: null }, 4, { usualServings: 2, householdSize: 4 })).toBe(4);
+    expect(servingsFor({ servings: 2 }, 4, { usualServings: 7, householdSize: 4 })).toBe(2);
   });
 });

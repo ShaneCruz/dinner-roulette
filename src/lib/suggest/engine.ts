@@ -470,6 +470,34 @@ function pickFromTop(ranked: Scored[], random: () => number): Scored | null {
   return close[0];
 }
 
+/**
+ * Which open nights to cook on, for a family that cooks a few times a week
+ * and eats leftovers in between: spread out, so each dinner has a night
+ * after it for its leftovers, and on nights when the most people are home.
+ * Nights the planner already picked for are kept first when re-planning.
+ */
+export function pickCookNights<T extends { date: string; eaterIds: string[]; suggested?: boolean }>(
+  open: T[],
+  cooking: string[],
+  count: number,
+): T[] {
+  const taken = [...cooking];
+  const pool = [...open].sort((a, b) => a.date.localeCompare(b.date));
+  const picked: T[] = [];
+  const score = (night: T) =>
+    (night.suggested ? 100 : 0) +
+    night.eaterIds.length -
+    3 * taken.filter((date) => Math.abs(daysBetween(date, night.date)) === 1).length;
+  while (picked.length < count && pool.length) {
+    // Stable on ties, so the earliest of equally good nights wins.
+    const best = pool.reduce((a, b) => (score(b) > score(a) ? b : a));
+    picked.push(best);
+    taken.push(best.date);
+    pool.splice(pool.indexOf(best), 1);
+  }
+  return picked.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function suggestWeek(
   nights: EngineNight[],
   context: EngineContext,

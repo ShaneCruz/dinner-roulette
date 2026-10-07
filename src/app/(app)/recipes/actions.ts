@@ -15,7 +15,7 @@ import { requireActingMember, requireParentMember } from "@/lib/session";
 import { z } from "zod";
 import { loadFamilyBrief } from "@/lib/ai/brief";
 import { askAboutRecipe } from "@/lib/ai/kitchen";
-import { eatersFor, loadEaterContext, loadMeals, servingsFor } from "@/lib/plan/store";
+import { eatersFor, loadEaterContext, loadMeals, servingsFor, servingsRule, servingsToMake } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
 import { listRecipes } from "@/lib/recipes/store";
 
@@ -197,7 +197,9 @@ export async function askRecipeQuestion(
     return await askAboutRecipe(
       recipe,
       {
-        servings: onTonight && tonight ? servingsFor(tonight, eatersFor(eaterContext, today, tonight.eaterIds).length) : recipe.baseServings,
+        servings: onTonight && tonight
+          ? servingsFor(tonight, eatersFor(eaterContext, today, tonight.eaterIds).length, servingsRule(eaterContext, settings.usualServings))
+          : (await servingsToMake(db, recipe.id, today, settings.usualServings)).servings,
         tonight: Boolean(onTonight),
         sidesTonight: onTonight && tonight ? tonight.sideRecipeIds.map((id) => titles.get(id)).filter((t): t is string => Boolean(t)) : [],
         availableSides: sides.map((s) => s.title).slice(0, 30),

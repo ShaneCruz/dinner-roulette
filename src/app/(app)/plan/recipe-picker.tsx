@@ -5,8 +5,11 @@ import { Badge, Button, cx, inputClass } from "@/components/ui";
 import type { NightRanking, NightView, RecipeOption } from "@/lib/plan/view";
 import { TIME_BUDGETS, formatDay } from "@/lib/plan/week";
 import { daysBetween } from "@/lib/presence";
-import { recommendSidesForMainAction, type SideIdea } from "./actions";
+import { recipePreviewAction, recommendSidesForMainAction, type RecipePreview, type SideIdea } from "./actions";
 import { formatCount } from "@/components/source-rating";
+import { IngredientLine } from "../recipes/[slug]/recipe-view";
+import { scaleIngredient } from "@/lib/recipes/scale";
+import { SideSearch } from "./side-search";
 
 export function RecipePicker({
   night,
@@ -30,7 +33,9 @@ export function RecipePicker({
   const [search, setSearch] = useState("");
   const [mainId, setMainId] = useState<string | null>(night.recipeId);
   const [sideIds, setSideIds] = useState<string[]>(night.sideRecipeIds);
-  const [step, setStep] = useState<"main" | "sides">("main");
+  const [step, setStep] = useState<"main" | "preview" | "sides">("main");
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, RecipePreview | { error: string }>>({});
   const [ideas, setIdeas] = useState<SideIdea[] | null>(null);
   const [ideasFor, setIdeasFor] = useState<string | null>(null);
   const [ideasError, setIdeasError] = useState<string | null>(null);
@@ -55,6 +60,16 @@ export function RecipePicker({
         else setIdeas(result.ideas);
       })
       .catch(() => ticket === request.current && setIdeasError("Couldn't get side ideas right now."));
+  }
+
+  /** Shows a dinner's ingredients and steps before it's picked. */
+  function openPreview(id: string) {
+    setPreviewId(id);
+    setStep("preview");
+    if (previews[id] && !("error" in previews[id])) return;
+    recipePreviewAction(id)
+      .then((result) => setPreviews((all) => ({ ...all, [id]: "error" in result ? result : result.recipe })))
+      .catch(() => setPreviews((all) => ({ ...all, [id]: { error: "Couldn't load that recipe." } })));
   }
 
   useEffect(() => {
@@ -85,7 +100,9 @@ export function RecipePicker({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-muted">{formatDay(night.date, "long")}</p>
-            <h2 className="text-2xl font-bold">{step === "main" ? "What's for dinner?" : "Any sides?"}</h2>
+            <h2 className="text-2xl font-bold">
+              {step === "main" ? "What's for dinner?" : step === "preview" ? "Take a look" : "Any sides?"}
+            </h2>
             <p className="text-sm text-muted">
               {TIME_BUDGETS[night.timeBudget].short} · {TIME_BUDGETS[night.timeBudget].hint}
               {favoredName && step === "main" ? ` · 🎯 ${favoredName}'s turn` : ""}
@@ -114,7 +131,7 @@ export function RecipePicker({
                 selectedId={mainId}
                 night={night}
                 plannedThisWeek={plannedThisWeek}
-                onSelect={chooseMain}
+                onSelect={openPreview}
               />
               {tooLong.length > 0 ? (
                 <OptionList
@@ -125,12 +142,19 @@ export function RecipePicker({
                   night={night}
                   plannedThisWeek={plannedThisWeek}
                   muted
-                  onSelect={chooseMain}
+                  onSelect={openPreview}
                 />
               ) : null}
               {mains.length === 0 ? <p className="py-8 text-center text-muted">No dinners match “{search}”.</p> : null}
             </div>
           </>
+        ) : step === "preview" && previewId ? (
+          <Preview
+            preview={previews[previewId] ?? null}
+            servings={night.servings}
+            onBack={() => setStep("main")}
+            onPick={() => chooseMain(previewId)}
+          />
         ) : (
           <>
             <p className="mb-3 font-semibold">{main?.title}</p>
@@ -182,6 +206,33 @@ export function RecipePicker({
                   <p className="mt-2 text-xs text-muted">New sides get a simple recipe written and saved to your sides.</p>
                 ) : null}
               </div>
+              <div className="space-y-2">
+                <p className="text-sm font-bold">Add your own</p>
+                <SideSearch
+                  sides={sides.filter((side) => !sideIds.includes(side.id))}
+                  onPick={(id) => setSideIds([...sideIds, id])}
+                  onAddNew={(title) =>
+                    !newTitles.some((t) => t.toLowerCase() === title.toLowerCase()) && setNewTitles([...newTitles, title])
+                  }
+                />
+                {newTitles.filter((title) => !ideas?.some((idea) => idea.title === title)).length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {newTitles
+                      .filter((title) => !ideas?.some((idea) => idea.title === title))
+                      .map((title) => (
+                        <button
+                          key={title}
+                          type="button"
+                          aria-label={`Remove ${title}`}
+                          onClick={() => setNewTitles(newTitles.filter((t) => t !== title))}
+                          className="rounded-full border border-plum bg-plum-soft px-3 py-1.5 text-sm font-semibold text-plum"
+                        >
+                          ✓ {title} <span className="ml-1 text-xs">new ×</span>
+                        </button>
+                      ))}
+                  </div>
+                ) : null}
+              </div>
               <p className="text-sm font-bold">Your sides</p>
               <div className="flex flex-wrap gap-2">
                 {sides.map((side) => {
@@ -204,7 +255,7 @@ export function RecipePicker({
               </div>
             </div>
             <div className="mt-5 flex justify-between gap-2">
-              <Button type="button" variant="ghost" onClick={() => setStep("main")}>
+              <Button type="button" variant="ghost" onClick={() => setStep(mainId ? "preview" : "main")}>
                 Back
               </Button>
               <Button type="button" onClick={() => mainId && onPick(mainId, sideIds, newTitles)}>
@@ -215,6 +266,73 @@ export function RecipePicker({
         )}
       </div>
     </div>
+  );
+}
+
+function Preview({
+  preview,
+  servings,
+  onBack,
+  onPick,
+}: {
+  preview: RecipePreview | { error: string } | null;
+  servings: number;
+  onBack: () => void;
+  onPick: () => void;
+}) {
+  const recipe = preview && !("error" in preview) ? preview : null;
+  const factor = recipe ? servings / recipe.baseServings : 1;
+  return (
+    <>
+      <div className="-mx-2 flex-1 space-y-4 overflow-y-auto px-2">
+        {!preview ? <p className="py-8 text-center text-muted">Opening the recipe…</p> : null}
+        {preview && "error" in preview ? <p className="py-8 text-center text-muted">{preview.error}</p> : null}
+        {recipe ? (
+          <>
+            <div>
+              <p className="text-lg font-bold leading-tight">{recipe.title}</p>
+              <p className="mt-1 text-sm text-muted">{recipe.description}</p>
+              <p className="mt-1 text-xs text-muted">
+                {recipe.activeMinutes} min hands-on · {formatTotal(recipe.totalMinutes)} total ·{" "}
+                <a href={`/recipes/${recipe.slug}`} target="_blank" rel="noreferrer" className="font-semibold text-tomato">
+                  Full recipe ↗
+                </a>
+              </p>
+            </div>
+            <section>
+              <h3 className="mb-1.5 text-xs font-bold uppercase tracking-widest text-muted">
+                Ingredients for {servings}
+                {servings !== recipe.baseServings ? ` (recipe makes ${recipe.baseServings})` : ""}
+              </h3>
+              <ul className="space-y-1 text-sm">
+                {recipe.ingredients.map((ingredient, index) => (
+                  <li key={index}>
+                    <IngredientLine ingredient={scaleIngredient(ingredient, factor)} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section>
+              <h3 className="mb-1.5 text-xs font-bold uppercase tracking-widest text-muted">Steps</h3>
+              <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed">
+                {recipe.steps.map((step, index) => (
+                  <li key={index}>{step.text}</li>
+                ))}
+              </ol>
+            </section>
+            {recipe.notes ? <p className="whitespace-pre-line text-sm text-muted">📝 {recipe.notes}</p> : null}
+          </>
+        ) : null}
+      </div>
+      <div className="mt-5 flex justify-between gap-2">
+        <Button type="button" variant="ghost" onClick={onBack}>
+          ← Other dinners
+        </Button>
+        <Button type="button" disabled={!recipe} onClick={onPick}>
+          Pick this one
+        </Button>
+      </div>
+    </>
   );
 }
 

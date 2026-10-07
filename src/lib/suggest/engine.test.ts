@@ -3,6 +3,7 @@ import { STARTER_RECIPES } from "@/data/starter-recipes";
 import { recipeInputSchema } from "@/lib/recipes/schema";
 import {
   assignTurns,
+  pickCookNights,
   rankForNight,
   scoreRecipe,
   season,
@@ -321,5 +322,32 @@ describe("ratings from the site a recipe came from", () => {
     const withOurRating = scoreRecipe(stranger, night, rated, []);
     const plainWithOurRating = scoreRecipe(toEngine("baked-mostaccioli"), night, rated, []);
     expect(withOurRating.score).toBeCloseTo(plainWithOurRating.score);
+  });
+});
+
+describe("pickCookNights", () => {
+  const week = ["2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"];
+  const open = (dates: string[], eaters = 4) => dates.map((date) => ({ date, eaterIds: Array.from({ length: eaters }, (_, i) => `m${i}`) }));
+
+  it("spreads dinners out so each one has a leftovers night after it", () => {
+    const picked = pickCookNights(open(week), [], 3).map((n) => n.date);
+    expect(picked).toEqual(["2026-10-11", "2026-10-13", "2026-10-15"]);
+  });
+
+  it("works around dinners already planned", () => {
+    const picked = pickCookNights(open(week.filter((d) => d !== "2026-10-13")), ["2026-10-13"], 2).map((n) => n.date);
+    expect(picked).toHaveLength(2);
+    expect(picked).not.toContain("2026-10-12");
+    expect(picked).not.toContain("2026-10-14");
+  });
+
+  it("prefers nights when more people are home", () => {
+    const nights = [...open(week.slice(0, 5), 2), ...open(week.slice(5), 5)];
+    expect(pickCookNights(nights, [], 1).map((n) => n.date)).toEqual(["2026-10-16"]);
+  });
+
+  it("never picks more than asked, or than there are", () => {
+    expect(pickCookNights(open(week), [], 0)).toEqual([]);
+    expect(pickCookNights(open(week.slice(0, 2)), [], 5)).toHaveLength(2);
   });
 });

@@ -22,13 +22,13 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
 
   const [view, members] = await Promise.all([loadWeekView(weekStart), getActiveMembers()]);
   const isCurrent = dates.includes(today);
-  const planned = view.nights.filter((n) => n.status !== "empty").length;
+  const dinners = view.nights.filter((n) => n.nightType === "cook" && n.recipeId && n.status !== "skipped").length;
 
   return (
     <div>
       <PageHeader
         title={isCurrent ? "This week" : `Week of ${formatDay(weekStart)}`}
-        subtitle={`${formatDay(dates[0])} – ${formatDay(dates[6])} · ${planned} of 7 nights planned`}
+        subtitle={`${formatDay(dates[0])} – ${formatDay(dates[6])} · ${dinners} of ${settings.cookNightsPerWeek} dinners planned`}
         actions={
           <>
             <ButtonLink href={`/grocery?week=${weekStart}`} variant="secondary" size="sm">
@@ -82,6 +82,7 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
         today={today}
         canEdit={acting.role === "parent"}
         weeknightActiveMinutes={settings.weeknightActiveMinutes}
+        cookNightsPerWeek={settings.cookNightsPerWeek}
         members={members.map((m) => ({
           id: m.id,
           name: m.name,

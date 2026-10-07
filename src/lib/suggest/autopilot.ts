@@ -7,13 +7,20 @@ import { addDays } from "@/lib/presence";
 import { applySuggestions } from "./apply";
 
 /**
- * Autopilot: on the family's chosen day, plan next week's open nights so
- * nobody has to. Runs once per week; dinners people already picked (and
+ * Autopilot (off unless the family turns it on): on their chosen day, plan
+ * next week's usual number of cooking nights so nobody has to. Runs once per week; dinners people already picked (and
  * Sunday-session votes) are respected. Returns a short summary to send.
  */
 export async function runAutopilot(
   db: Database,
-  options: { today: string; nowMinutes: number; weekStartsOn: number; autopilotDay: number; enabled: boolean },
+  options: {
+    today: string;
+    nowMinutes: number;
+    weekStartsOn: number;
+    autopilotDay: number;
+    enabled: boolean;
+    cookNightsPerWeek?: number;
+  },
 ): Promise<{ weekStart: string; filled: number; lines: string[] } | null> {
   if (!options.enabled || dayOfWeek(options.today) !== options.autopilotDay || options.nowMinutes < 9 * 60) return null;
   const weekStart = addDays(weekStartFor(options.today, options.weekStartsOn), 7);
@@ -26,7 +33,9 @@ export async function runAutopilot(
     .returning({ id: weekPlan.id });
   if (!claimed.length) return null;
 
-  const filled = await applySuggestions(db, weekStart, weekStart, options.weekStartsOn);
+  const filled = await applySuggestions(db, weekStart, weekStart, options.weekStartsOn, {
+    cookNights: options.cookNightsPerWeek,
+  });
   const dates = weekDates(weekStart);
   const meals = await loadMeals(db, dates[0], dates[6]);
   const titles = await recipeTitles(db, [...meals.values()].flatMap((m) => (m.recipeId ? [m.recipeId] : [])));

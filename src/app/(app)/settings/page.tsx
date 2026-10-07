@@ -49,6 +49,8 @@ export default async function SettingsPage() {
           defaultCooldownDays: settings.defaultCooldownDays,
           chaosSliceEnabled: settings.chaosSliceEnabled,
           weekStartsOn: settings.weekStartsOn,
+          usualServings: settings.usualServings,
+          cookNightsPerWeek: settings.cookNightsPerWeek,
         }}
         initialGrillCaps={settings.grillCaps}
       />

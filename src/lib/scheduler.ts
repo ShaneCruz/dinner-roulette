@@ -86,6 +86,7 @@ export async function runScheduledJobs(db: Database, now = new Date()) {
       weekStartsOn: settings.weekStartsOn,
       autopilotDay: settings.autopilotDay,
       enabled: settings.autopilotEnabled,
+      cookNightsPerWeek: settings.cookNightsPerWeek,
     });
     if (!result) return null;
     if (prefs.autopilot) {

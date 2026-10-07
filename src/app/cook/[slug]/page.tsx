@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { loadAudience } from "@/lib/members";
-import { eatersFor, loadEaterContext, loadMeals, servingsFor } from "@/lib/plan/store";
+import { eatersFor, loadEaterContext, loadMeals, servingsFor, servingsRule, servingsToMake } from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
 import { heatSeekers, variantAudience } from "@/lib/recipes/audience";
 import { getRecipe } from "@/lib/recipes/store";
@@ -28,8 +28,8 @@ export default async function CookPage({ params }: PageProps<"/cook/[slug]">) {
   const tonight = meals.get(today);
   const isTonight = tonight?.nightType === "cook" && (tonight.recipeId === recipe.id || tonight.sideRecipeIds.includes(recipe.id));
   const servings = isTonight
-    ? servingsFor(tonight, eatersFor(eaterContext, today, tonight.eaterIds).length)
-    : recipe.baseServings;
+    ? servingsFor(tonight, eatersFor(eaterContext, today, tonight.eaterIds).length, servingsRule(eaterContext, settings.usualServings))
+    : (await servingsToMake(db, recipe.id, today, settings.usualServings)).servings;
 
   // Everything else on tonight's plate, so the sides can be timed with the main.
   const alsoTonight =

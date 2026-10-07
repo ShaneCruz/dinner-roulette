@@ -26,7 +26,7 @@ import { AiBudgetError, aiEnabled, friendlyAiError } from "@/lib/ai/claude";
 import { recommendSides, writeSideRecipe } from "@/lib/ai/sides";
 import { ensureNutrition } from "@/lib/nutrition-store";
 import { loadMeals } from "@/lib/plan/store";
-import { getRecipe, saveRecipe, slugify, uniqueSlug } from "@/lib/recipes/store";
+import { getRecipe, saveRecipe, slugify, uniqueSlug, type StoredRecipe } from "@/lib/recipes/store";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -113,11 +113,19 @@ export async function discardBumpedAction(bumpedId: string) {
   refresh();
 }
 
-/** Fills the week's open cooking nights with suggestions. */
-export async function suggestWeekAction(weekStart: string): Promise<{ error: string } | { filled: number }> {
+/**
+ * Suggests dinners for the week: enough to make the family's usual number
+ * of cooked dinners, or every open night when they ask for that.
+ */
+export async function suggestWeekAction(
+  weekStart: string,
+  everyNight = false,
+): Promise<{ error: string } | { filled: number }> {
   const { settings } = await requireParentMember();
   if (!dateSchema.safeParse(weekStart).success) return { error: "Unknown week." };
-  const filled = await applySuggestions(db, weekStart, todayIn(settings.timezone), settings.weekStartsOn);
+  const filled = await applySuggestions(db, weekStart, todayIn(settings.timezone), settings.weekStartsOn, {
+    cookNights: everyNight ? undefined : settings.cookNightsPerWeek,
+  });
   refresh();
   return { filled };
 }
@@ -132,6 +140,21 @@ export async function anotherIdeaAction(date: string): Promise<{ error: string }
   });
   if (!filled) return { error: "Out of ideas for that night. Try loosening the time or who's eating." };
   refresh();
+}
+
+export type RecipePreview = Pick<
+  StoredRecipe,
+  "id" | "slug" | "title" | "description" | "activeMinutes" | "totalMinutes" | "baseServings" | "ingredients" | "steps" | "notes"
+>;
+
+/** A dinner's ingredients and steps, to read before picking it. */
+export async function recipePreviewAction(recipeId: string): Promise<{ error: string } | { recipe: RecipePreview }> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown dinner." };
+  const found = await getRecipe(db, { id: recipeId });
+  if (!found) return { error: "That recipe is gone." };
+  const { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes } = found;
+  return { recipe: { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes } };
 }
 
 export type SideIdea = {

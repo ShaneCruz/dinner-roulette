@@ -2,6 +2,7 @@ import { and, asc, eq, gte, inArray, lte, notInArray } from "drizzle-orm";
 import type { Database } from "@/db";
 import {
   bumpedMeal,
+  familySettings,
   groceryItem,
   member,
   memberAvailability,
@@ -11,7 +12,7 @@ import {
   weekPlan,
 } from "@/db/schema";
 import { buildGroceryList, type GroceryMealInput } from "@/lib/grocery/build";
-import { presenceOn, type PresenceRange } from "@/lib/presence";
+import { addDays, presenceOn, type PresenceRange } from "@/lib/presence";
 import { variantAudience, type AudienceMember } from "@/lib/recipes/audience";
 import { getRecipe, type StoredRecipe } from "@/lib/recipes/store";
 import { weekDates, weekStartFor, type NightType, type TimeBudget } from "./week";
@@ -200,8 +201,44 @@ export function eatersFor(
   return context.members.filter((m) => presenceOn(m, context.ranges, date).presence === "home");
 }
 
-export function servingsFor(meal: { servings: number | null }, eaterCount: number): number {
-  return meal.servings ?? Math.max(eaterCount, 1);
+/** How the family sizes a dinner: its usual batch, and the household that batch is for. */
+export type ServingsRule = { usualServings: number | null; householdSize: number };
+
+export function servingsRule(context: EaterContext, usualServings: number | null): ServingsRule {
+  return { usualServings, householdSize: context.members.filter((m) => m.defaultPresence === "home").length };
+}
+
+/**
+ * Servings to make: what someone set for the night, or one per eater plus
+ * the family's usual extra for leftovers. The extra stays when someone's
+ * away; it's for tomorrow's lunch, not for them.
+ */
+export function servingsFor(meal: { servings: number | null }, eaterCount: number, rule?: ServingsRule): number {
+  if (meal.servings != null) return meal.servings;
+  const eaters = Math.max(eaterCount, 1);
+  if (!rule?.usualServings) return eaters;
+  return eaters + Math.max(0, rule.usualServings - rule.householdSize);
+}
+
+/**
+ * Servings to show a recipe at: the batch planned for its next night this
+ * week, or the family's usual batch when it isn't planned. Never the
+ * recipe's own yield, which is whatever the website it came from said.
+ */
+export async function servingsToMake(
+  db: Database,
+  recipeId: string,
+  today: string,
+  usualServings: number | null,
+): Promise<{ servings: number; date: string | null }> {
+  const lastDay = addDays(today, 6);
+  const [meals, context] = await Promise.all([loadMeals(db, today, lastDay), loadEaterContext(db, today, lastDay)]);
+  const rule = servingsRule(context, usualServings);
+  const next = [...meals.values()].find(
+    (m) => m.nightType === "cook" && m.status === "planned" && (m.recipeId === recipeId || m.sideRecipeIds.includes(recipeId)),
+  );
+  if (next) return { servings: servingsFor(next, eatersFor(context, next.date, next.eaterIds).length, rule), date: next.date };
+  return { servings: servingsFor({ servings: null }, rule.householdSize, rule), date: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +258,8 @@ export async function regenerateGroceryList(db: Database, weekPlanId: string) {
     (m) => m.nightType === "cook" && m.status !== "skipped" && m.recipeId,
   );
   const context = await loadEaterContext(db, dates[0], dates[6]);
+  const [settings] = await db.select({ usualServings: familySettings.usualServings }).from(familySettings).limit(1);
+  const rule = servingsRule(context, settings?.usualServings ?? null);
 
   const recipeIds = [...new Set(meals.flatMap((m) => [m.recipeId!, ...m.sideRecipeIds]))];
   const recipes = new Map<string, StoredRecipe>();
@@ -232,7 +271,7 @@ export async function regenerateGroceryList(db: Database, weekPlanId: string) {
   const inputs: GroceryMealInput[] = [];
   for (const meal of meals) {
     const eaters = eatersFor(context, meal.date, meal.eaterIds);
-    const servings = servingsFor(meal, eaters.length);
+    const servings = servingsFor(meal, eaters.length, rule);
     for (const id of [meal.recipeId!, ...meal.sideRecipeIds]) {
       const r = recipes.get(id);
       if (!r) continue;

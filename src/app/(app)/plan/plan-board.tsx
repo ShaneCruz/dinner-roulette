@@ -44,6 +44,7 @@ export function PlanBoard({
   today,
   canEdit,
   weeknightActiveMinutes,
+  cookNightsPerWeek,
 }: {
   nights: NightView[];
   options: RecipeOption[];
@@ -55,11 +56,16 @@ export function PlanBoard({
   today: string;
   canEdit: boolean;
   weeknightActiveMinutes: number;
+  cookNightsPerWeek: number;
 }) {
   const [picking, setPicking] = useState<NightView | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
+  const allSides = useMemo(
+    () => options.filter((o) => o.kind === "side").map((o) => ({ id: o.id, title: o.title })),
+    [options],
+  );
 
   const run = (work: () => Promise<{ error: string } | void>) =>
     startTransition(async () => {
@@ -78,6 +84,18 @@ export function PlanBoard({
     (n) => n.nightType === "cook" && !n.recipeId && n.status !== "skipped" && n.status !== "cooked",
   ).length;
   const [notice, setNotice] = useState<string | null>(null);
+  const dinners = nights.filter((n) => n.nightType === "cook" && n.recipeId && n.status !== "skipped").length;
+  const toSuggest = Math.min(openNights, cookNightsPerWeek - dinners);
+  const suggest = (everyNight: boolean) =>
+    run(async () => {
+      const result = await suggestWeekAction(weekStart, everyNight);
+      if ("error" in result) return result;
+      setNotice(
+        result.filled
+          ? `Planned ${result.filled} ${result.filled === 1 ? "dinner" : "dinners"}. Tap ↻ on any night for another idea.`
+          : "Couldn't find dinners that fit. Try more time or fewer rules.",
+      );
+    });
   const cookedMeals = nights
     .filter((n) => n.nightType === "cook" && n.recipeId && n.status !== "skipped")
     .map((n) => {
@@ -102,33 +120,27 @@ export function PlanBoard({
         </p>
       ) : null}
 
-      {canEdit && openNights > 0 ? (
+      {canEdit && openNights > 0 && dinners < cookNightsPerWeek ? (
         <Card className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-plum-soft to-surface">
           <div>
             <p className="font-bold">
-              {openNights} open {openNights === 1 ? "night" : "nights"} this week
+              {dinners} of {cookNightsPerWeek} dinners planned this week
             </p>
             <p className="text-sm text-muted">
-              Let the planner pick, based on who&apos;s home, time, ratings, and whose turn it is.
+              The planner can pick {toSuggest === 1 ? "one" : toSuggest}, spaced out so leftovers get a night, based on
+              who&apos;s home, time, ratings, and whose turn it is.
             </p>
           </div>
-          <Button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                const result = await suggestWeekAction(weekStart);
-                if ("error" in result) return result;
-                setNotice(
-                  result.filled
-                    ? `Planned ${result.filled} ${result.filled === 1 ? "dinner" : "dinners"}. Tap ↻ on any night for another idea.`
-                    : "Couldn't find dinners that fit. Try more time or fewer rules.",
-                );
-              })
-            }
-          >
-            ✨ Suggest dinners
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button type="button" disabled={pending} onClick={() => suggest(false)}>
+              ✨ Suggest {toSuggest === 1 ? "a dinner" : `${toSuggest} dinners`}
+            </Button>
+            {openNights > toSuggest ? (
+              <button type="button" disabled={pending} onClick={() => suggest(true)} className="text-xs font-semibold text-muted underline">
+                or fill all {openNights} open nights
+              </button>
+            ) : null}
+          </div>
         </Card>
       ) : null}
       {notice ? <p className="rounded-2xl bg-basil-soft px-4 py-3 text-sm text-basil">{notice}</p> : null}
@@ -194,6 +206,7 @@ export function PlanBoard({
               weeknightActiveMinutes={weeknightActiveMinutes}
               otherNights={nights.filter((n) => n.date !== night.date)}
               restaurantName={restaurants.find((r) => r.id === night.restaurantId)?.name ?? null}
+              allSides={allSides}
               onPick={() => setPicking(night)}
               run={run}
             />
@@ -246,11 +259,13 @@ function NightCard({
   weeknightActiveMinutes,
   otherNights,
   restaurantName,
+  allSides,
   onPick,
   run,
 }: {
   night: NightView;
   restaurantName: string | null;
+  allSides: { id: string; title: string }[];
   recipe: RecipeOption | null;
   sides: RecipeOption[];
   members: BoardMember[];
@@ -411,6 +426,7 @@ function NightCard({
               <SideRecommender
                 date={night.date}
                 sides={sides.map((side) => ({ id: side.id, slug: side.slug, title: side.title }))}
+                allSides={allSides}
                 canEdit={canEdit && night.status === "planned"}
               />
             ) : null}
