@@ -28,11 +28,13 @@ import { GettingStarted } from "@/components/getting-started";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { MadeItButton } from "./tonight-actions";
 import { CookPhotoButton } from "@/components/cook-photo-button";
+import { recentCookPhotos } from "@/lib/recipes/cook-photos";
+import { cookPhotoSrc } from "@/lib/recipes/picture";
 
 export default async function HomePage() {
   const { settings, acting } = await requireActingMember();
   const today = todayIn(settings.timezone);
-  const [members, ranges] = await Promise.all([getActiveMembers(), loadPresenceRanges(today)]);
+  const [members, ranges, highlights] = await Promise.all([getActiveMembers(), loadPresenceRanges(today), recentCookPhotos(db)]);
 
   const tone = acting.humorDial;
   const greeting = say(greetingKey(hourIn(settings.timezone)), tone, { name: acting.name }, today.charCodeAt(9));
@@ -300,6 +302,25 @@ export default async function HomePage() {
           ) : null}
         </Card>
       </div>
+
+      {highlights.total ? (
+        <Link href="/highlights" className="group block">
+          <Card className="flex items-center gap-4 bg-gradient-to-r from-plum-soft to-surface transition group-hover:shadow-md">
+            <div className="flex -space-x-3">
+              {highlights.latest.map((p) => (
+                // eslint-disable-next-line @next/next/no-img-element -- the family's own photos, already small
+                <img key={p.id} src={cookPhotoSrc(p.id)} alt={p.title} className="h-14 w-14 rounded-2xl border-2 border-surface object-cover" />
+              ))}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold">✨ Chef Highlights</p>
+              <p className="truncate text-sm text-muted">
+                {highlights.total} {highlights.total === 1 ? "photo" : "photos"} on the wall of fame. Show them off →
+              </p>
+            </div>
+          </Card>
+        </Link>
+      ) : null}
 
       {stats ? <TrophyShelf stats={stats} name={acting.name} compact /> : null}
     </div>

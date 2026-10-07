@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { CookPhotoButton } from "@/components/cook-photo-button";
 import { Card } from "@/components/ui";
@@ -57,7 +58,10 @@ export function MadeGallery({
           <p className="text-sm text-muted">
             {makes.length
               ? `${makes.length} ${makes.length === 1 ? "photo" : "photos"}, last on ${formatDay(makes[0].madeOn)}.`
-              : "Snap it next time it's on the table, and it shows up here."}
+              : "Snap it next time it's on the table, and it shows up here."}{" "}
+            <Link href="/highlights" className="font-semibold text-tomato">
+              ✨ All Chef Highlights
+            </Link>
           </p>
         </div>
         <CookPhotoButton

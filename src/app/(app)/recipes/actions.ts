@@ -35,7 +35,16 @@ import { requireActingMember, requireParentMember } from "@/lib/session";
 import { z } from "zod";
 import { loadFamilyBrief } from "@/lib/ai/brief";
 import { askAboutRecipe } from "@/lib/ai/kitchen";
-import { eatersFor, loadEaterContext, loadMeals, servingsFor, servingsRule, servingsToMake } from "@/lib/plan/store";
+import {
+  eatersFor,
+  loadEaterContext,
+  loadMeals,
+  regenerateGroceryList,
+  saveNight,
+  servingsFor,
+  servingsRule,
+  servingsToMake,
+} from "@/lib/plan/store";
 import { todayIn } from "@/lib/presence";
 import { listRecipes } from "@/lib/recipes/store";
 
@@ -394,6 +403,11 @@ export async function addCookPhotoAction(recipeId: string, mealId: string | null
     if (meal && (meal.recipeId === recipeId || meal.sideRecipeIds.includes(recipeId))) {
       madeOn = meal.date;
       plannedMealId = meal.id;
+      // A photo of tonight's (or an earlier night's) dinner means it got made.
+      if (meal.status === "planned" && meal.date <= todayIn(settings.timezone)) {
+        const planId = await saveNight(db, meal.date, settings.weekStartsOn, { status: "cooked" });
+        await regenerateGroceryList(db, planId);
+      }
     }
   }
   await addCookPhoto(db, {
