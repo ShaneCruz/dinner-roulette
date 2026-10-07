@@ -6,6 +6,7 @@ import { RecipePicture } from "@/components/recipe-picture";
 import { Badge, Button, Card, inputClass } from "@/components/ui";
 import type { DinnerTurn } from "@/lib/ai/dinner-picks";
 import { clockLabel } from "@/lib/reminders";
+import { formatDay } from "@/lib/plan/week";
 import type { TonightEvent } from "@/lib/sports/schedule";
 import { CookTonight } from "../quick/cook-tonight";
 import { askForDinnerAction, type DinnerIdea } from "./actions";
@@ -198,6 +199,13 @@ export function AskForDinner({ tonightTitle, schedule }: { tonightTitle: string 
                   <p className="text-sm">{idea.why}</p>
                   {idea.timing ? <p className="text-xs font-semibold text-plum">⏰ {idea.timing}</p> : null}
                   {idea.tip ? <p className="text-xs text-muted">💡 {idea.tip}</p> : null}
+                  {idea.lastMade ? (
+                    <Link href={`/recipes/${idea.slug}`} className="flex items-center gap-2 text-xs text-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- the family's own photo, already small */}
+                      <img src={idea.lastMade.src} alt="" className="h-8 w-8 rounded-lg object-cover" />
+                      📸 Last made {formatDay(idea.lastMade.madeOn)}
+                    </Link>
+                  ) : null}
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone={idea.activeMinutes <= 20 ? "basil" : "neutral"}>⏱ {idea.activeMinutes} min hands-on</Badge>
                     {idea.totalMinutes - idea.activeMinutes >= 30 ? <Badge>{formatTotal(idea.totalMinutes)} total</Badge> : null}

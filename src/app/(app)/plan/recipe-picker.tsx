@@ -11,7 +11,7 @@ import { IngredientLine } from "../recipes/[slug]/recipe-view";
 import { scaleIngredient } from "@/lib/recipes/scale";
 import { SideSearch } from "./side-search";
 import { RecipePicture } from "@/components/recipe-picture";
-import { recipePictureSrc } from "@/lib/recipes/picture";
+import { cookPhotoSrc, recipePictureSrc } from "@/lib/recipes/picture";
 
 export function RecipePicker({
   night,
@@ -271,6 +271,20 @@ export function RecipePicker({
   );
 }
 
+/** The family's latest photo of the dish, to remember how it turned out. */
+function LastMade({ id, madeOn }: { id: string; madeOn: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-surface-muted p-2">
+      {/* eslint-disable-next-line @next/next/no-img-element -- the family's own photo, already small */}
+      <img src={cookPhotoSrc(id)} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+      <p className="text-sm">
+        <span className="font-semibold">📸 Last time you made it</span>
+        <span className="block text-muted">{formatDay(madeOn, "long")}</span>
+      </p>
+    </div>
+  );
+}
+
 function Preview({
   preview,
   servings,
@@ -292,6 +306,7 @@ function Preview({
         {recipe ? (
           <>
             <RecipePicture src={recipePictureSrc(recipe)} alt={recipe.title} className="mx-auto h-auto max-h-64 w-auto max-w-full rounded-2xl" />
+            {recipe.lastMade ? <LastMade id={recipe.lastMade.id} madeOn={recipe.lastMade.madeOn} /> : null}
             <div>
               <p className="text-lg font-bold leading-tight">{recipe.title}</p>
               <p className="mt-1 text-sm text-muted">{recipe.description}</p>

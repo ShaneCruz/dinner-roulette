@@ -3,3 +3,8 @@ export function recipePictureSrc(recipe: { id: string; imageUrl: string | null; 
   if (recipe.photoAt) return `/api/recipes/${recipe.id}/photo?v=${new Date(recipe.photoAt).getTime()}`;
   return recipe.imageUrl;
 }
+
+/** A photo from a recipe's log of makes. */
+export function cookPhotoSrc(id: string): string {
+  return `/api/cook-photos/${id}`;
+}

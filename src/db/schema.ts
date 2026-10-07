@@ -386,6 +386,33 @@ export const recipePhoto = pgTable("recipe_photo", {
   ...timestamps,
 });
 
+/**
+ * Photos of a dish as the family actually made it, dated: a log of makes
+ * to look back on, kept apart from the recipe's main picture (one can be
+ * promoted to it).
+ */
+export const cookPhoto = pgTable(
+  "cook_photo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    /** The planned dinner it was taken at, when there was one */
+    plannedMealId: uuid("planned_meal_id").references(() => plannedMeal.id, { onDelete: "set null" }),
+    /** Whose photo it is */
+    memberId: uuid("member_id").references(() => member.id, { onDelete: "set null" }),
+    /** The day it was made, in the family's time zone */
+    madeOn: date("made_on").notNull(),
+    caption: text("caption"),
+    contentType: text("content_type").notNull(),
+    /** Base64, shrunk on the phone first */
+    data: text("data").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("cook_photo_recipe_idx").on(t.recipeId, t.madeOn)],
+);
+
 export const recipeVariant = pgTable(
   "recipe_variant",
   {

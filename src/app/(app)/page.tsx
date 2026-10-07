@@ -27,6 +27,7 @@ import { loadSetupSteps } from "@/lib/setup-progress";
 import { GettingStarted } from "@/components/getting-started";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { MadeItButton } from "./tonight-actions";
+import { CookPhotoButton } from "@/components/cook-photo-button";
 
 export default async function HomePage() {
   const { settings, acting } = await requireActingMember();
@@ -269,6 +270,9 @@ export default async function HomePage() {
             )}
             {tonightRecipe && tonight?.status === "planned" && acting.role === "parent" ? (
               <MadeItButton date={today} />
+            ) : null}
+            {tonightRecipe && tonight && tonight.status !== "skipped" ? (
+              <CookPhotoButton recipeId={tonightRecipe.id} mealId={tonight.id} label="📸 Snap it" />
             ) : null}
             {tonightRecipe ? (
               <ButtonLink href="/plan" variant="ghost">

@@ -10,6 +10,7 @@ import { formatDay } from "@/lib/plan/week";
 import { ratingsForMeal } from "@/lib/ratings/store";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { RateForm } from "./rate-form";
+import { CookPhotoButton } from "@/components/cook-photo-button";
 
 export const metadata = { title: "How was dinner?" };
 
@@ -26,6 +27,7 @@ export default async function RatePage({ params }: PageProps<"/rate/[mealId]">) 
       status: plannedMeal.status,
       title: recipe.title,
       slug: recipe.slug,
+      recipeId: recipe.id,
     })
     .from(plannedMeal)
     .innerJoin(recipe, eq(recipe.id, plannedMeal.recipeId))
@@ -67,6 +69,9 @@ export default async function RatePage({ params }: PageProps<"/rate/[mealId]">) 
           isParent ? "Rate for everyone at the table, or pass the phone around." : say("rateAsk", acting.humorDial)
         }`}
       />
+      <div className="mb-5">
+        <CookPhotoButton recipeId={meal.recipeId} mealId={meal.id} label="📸 Add a photo of how it turned out" />
+      </div>
       {people.length ? (
         <RateForm mealId={meal.id} people={people} humor={acting.humorDial} />
       ) : (

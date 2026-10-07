@@ -25,7 +25,9 @@ import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
 import { aiEnabled } from "@/lib/ai/claude";
 import { loadDinnerCandidates, recommendDinners, startTiming, type DinnerTurn } from "@/lib/ai/dinner-picks";
 import { minutesIn } from "@/lib/reminders";
-import { recipePictureSrc } from "@/lib/recipes/picture";
+import { cookPhotoSrc, recipePictureSrc } from "@/lib/recipes/picture";
+import { addCookPhoto, deleteCookPhoto, getCookPhoto, latestCookPhotos, promoteCookPhoto } from "@/lib/recipes/cook-photos";
+import { plannedMeal } from "@/db/schema";
 import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
 import { scheduleOn } from "@/lib/sports/store";
 import { describeSchedule } from "@/lib/sports/schedule";
@@ -292,6 +294,8 @@ export type DinnerIdea = {
   tip: string | null;
   /** "Start by 10:50 AM to eat at 7:20 PM", worked out from the recipe's total time */
   timing: string | null;
+  /** The family's latest photo of it as made */
+  lastMade: { src: string; madeOn: string } | null;
   activeMinutes: number;
   totalMinutes: number;
   method: string;
@@ -340,6 +344,7 @@ export async function askForDinnerAction(
       nowMinutes,
     );
     const bySlug = new Map(candidates.map((c) => [c.slug, c]));
+    const made = await latestCookPhotos(db, picks.map((p) => bySlug.get(p.slug)!.id));
     const rows = await listRecipes(db);
     const pictures = new Map(rows.map((r) => [r.id, recipePictureSrc(r)]));
     return {
@@ -353,6 +358,7 @@ export async function askForDinnerAction(
           why: p.why,
           tip: p.tip,
           timing: startTiming(p.eatAt, c.totalMinutes, nowMinutes),
+          lastMade: made.has(c.id) ? { src: cookPhotoSrc(made.get(c.id)!.id), madeOn: made.get(c.id)!.madeOn } : null,
           activeMinutes: c.activeMinutes,
           totalMinutes: c.totalMinutes,
           method: COOK_METHOD_LABELS[c.method],
@@ -366,4 +372,56 @@ export async function askForDinnerAction(
     console.error("Dinner ideas failed", error);
     return { error: friendlyAiError(error) };
   }
+}
+
+/**
+ * Adds a photo of the dish as made to its log. Taken at a planned dinner,
+ * it's dated that night; otherwise today. Anyone in the family can add one.
+ */
+export async function addCookPhotoAction(recipeId: string, mealId: string | null, form: FormData): Promise<{ error: string } | void> {
+  const { settings, acting } = await requireActingMember();
+  if (!z.uuid().safeParse(recipeId).success) return { error: "Unknown recipe." };
+  const file = form.get("photo");
+  if (!(file instanceof File) || file.size === 0) return { error: "Pick a photo first." };
+  if (!PHOTO_TYPES.includes(file.type)) return { error: "Photos need to be JPEG, PNG or WebP." };
+  if (file.size > MAX_PHOTO_BYTES) return { error: "That photo is too big. Try a different one." };
+  const found = await getRecipe(db, { id: recipeId });
+  if (!found) return { error: "That recipe is gone." };
+  let madeOn = todayIn(settings.timezone);
+  let plannedMealId: string | null = null;
+  if (mealId && z.uuid().safeParse(mealId).success) {
+    const [meal] = await db.select().from(plannedMeal).where(eq(plannedMeal.id, mealId));
+    if (meal && (meal.recipeId === recipeId || meal.sideRecipeIds.includes(recipeId))) {
+      madeOn = meal.date;
+      plannedMealId = meal.id;
+    }
+  }
+  await addCookPhoto(db, {
+    recipeId,
+    plannedMealId,
+    memberId: acting.id,
+    madeOn,
+    contentType: file.type,
+    data: Buffer.from(await file.arrayBuffer()).toString("base64"),
+  });
+  revalidatePath("/", "layout");
+}
+
+/** Removes a photo from the log: parents can remove any, everyone else their own. */
+export async function deleteCookPhotoAction(id: string): Promise<{ error: string } | void> {
+  const { acting } = await requireActingMember();
+  if (!z.uuid().safeParse(id).success) return { error: "Unknown photo." };
+  const photo = await getCookPhoto(db, id);
+  if (!photo) return;
+  if (acting.role !== "parent" && photo.memberId !== acting.id) return { error: "Only a parent can remove someone else's photo." };
+  await deleteCookPhoto(db, id);
+  revalidatePath("/", "layout");
+}
+
+/** Makes one of the makes the recipe's main picture. */
+export async function makeCookPhotoMainAction(id: string): Promise<{ error: string } | void> {
+  await requireParentMember();
+  if (!z.uuid().safeParse(id).success) return { error: "Unknown photo." };
+  if (!(await promoteCookPhoto(db, id))) return { error: "That photo is gone." };
+  revalidatePath("/", "layout");
 }

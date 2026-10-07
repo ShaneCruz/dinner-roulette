@@ -34,6 +34,8 @@ import { siteName } from "@/lib/ai/fetch-page";
 import { recipePictureSrc } from "@/lib/recipes/picture";
 import { RecipePicture } from "@/components/recipe-picture";
 import { PictureControls } from "./picture-controls";
+import { MadeGallery } from "./made-gallery";
+import { listCookPhotos } from "@/lib/recipes/cook-photos";
 
 // Asking Claude for a recipe tweak can take a minute.
 export const maxDuration = 300;
@@ -55,11 +57,12 @@ export default async function RecipePage({ params, searchParams }: PageProps<"/r
   const recipe = await getRecipe(db, { slug: (await params).slug });
   if (!recipe) notFound();
 
-  const [audience, ratings, members, batch] = await Promise.all([
+  const [audience, ratings, members, batch, makes] = await Promise.all([
     loadAudience(),
     ratingsForRecipe(db, recipe.id),
     getActiveMembers(),
     servingsToMake(db, recipe.id, todayIn(settings.timezone), settings.usualServings),
+    listCookPhotos(db, recipe.id),
   ]);
   const sides =
     recipe.pairsWith.length > 0
@@ -233,6 +236,8 @@ export default async function RecipePage({ params, searchParams }: PageProps<"/r
           <RecipeChat recipeId={recipe.id} title={recipe.title} canTweak={isParent} />
         </div>
       ) : null}
+
+      <MadeGallery recipeId={recipe.id} makes={makes} actingId={acting.id} isParent={isParent} />
 
       <RatingsSummary ratings={ratings} members={members} />
 

@@ -27,6 +27,7 @@ import { recommendSides, writeSideRecipe } from "@/lib/ai/sides";
 import { ensureNutrition } from "@/lib/nutrition-store";
 import { loadMeals } from "@/lib/plan/store";
 import { getRecipe, saveRecipe, slugify, uniqueSlug, type StoredRecipe } from "@/lib/recipes/store";
+import { latestCookPhotos } from "@/lib/recipes/cook-photos";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -156,7 +157,10 @@ export type RecipePreview = Pick<
   | "notes"
   | "imageUrl"
   | "photoAt"
->;
+> & {
+  /** The latest photo of it as the family made it */
+  lastMade: { id: string; madeOn: string } | null;
+};
 
 /** A dinner's ingredients and steps, to read before picking it. */
 export async function recipePreviewAction(recipeId: string): Promise<{ error: string } | { recipe: RecipePreview }> {
@@ -165,8 +169,9 @@ export async function recipePreviewAction(recipeId: string): Promise<{ error: st
   const found = await getRecipe(db, { id: recipeId });
   if (!found) return { error: "That recipe is gone." };
   const { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes, imageUrl, photoAt } = found;
+  const lastMade = (await latestCookPhotos(db, [id])).get(id) ?? null;
   return {
-    recipe: { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes, imageUrl, photoAt },
+    recipe: { id, slug, title, description, activeMinutes, totalMinutes, baseServings, ingredients, steps, notes, imageUrl, photoAt, lastMade },
   };
 }
 
