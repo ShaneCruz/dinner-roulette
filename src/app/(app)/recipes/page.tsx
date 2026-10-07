@@ -9,6 +9,7 @@ import { todayIn } from "@/lib/presence";
 import { requireActingMember } from "@/lib/session";
 import { aiEnabled } from "@/lib/ai/claude";
 import { AskForDinner } from "./ask-for-dinner";
+import { scheduleOn } from "@/lib/sports/store";
 
 export const metadata = { title: "Recipes" };
 
@@ -69,7 +70,10 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
       />
 
       {acting.role === "parent" && aiEnabled() && !archivedOnly ? (
-        <AskForDinner tonightTitle={await tonightsDinner(settings.timezone)} />
+        <AskForDinner
+          tonightTitle={await tonightsDinner(settings.timezone)}
+          schedule={await scheduleOn(db, settings, todayIn(settings.timezone))}
+        />
       ) : null}
 
       <form className="mb-4" role="search">

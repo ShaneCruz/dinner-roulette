@@ -5,14 +5,44 @@ import { vapidPublicKey } from "@/lib/push";
 import { ReminderSettings } from "./reminder-settings";
 import { AiBudget } from "./ai-budget";
 import { weekSpending } from "@/lib/ai/usage";
-import { requireParentMember } from "@/lib/session";
+import { getActiveMembers, requireParentMember } from "@/lib/session";
+import { db } from "@/db";
+import { listSportsCalendars, mapsEnabled } from "@/lib/sports/store";
+import { SportsCalendars, type CalendarSummary } from "./sports-calendars";
 import { SettingsForm } from "./settings-form";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const { settings, acting } = await requireParentMember();
-  const spending = await weekSpending();
+  const [spending, calendars, members] = await Promise.all([weekSpending(), listSportsCalendars(db), getActiveMembers()]);
+  const now = new Date();
+  const when = new Intl.DateTimeFormat("en-US", {
+    timeZone: settings.timezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: settings.timezone, month: "short", day: "numeric", year: "numeric" });
+  const summaries: CalendarSummary[] = calendars.map((c) => {
+    const upcoming = c.events.filter((e) => e.startUtc && new Date(e.startUtc) > now && e.status !== "cancelled");
+    const last = c.events.reduce<string | null>((max, e) => {
+      const at = e.startUtc ?? e.allDayDate;
+      return at && (!max || at > max) ? at : max;
+    }, null);
+    return {
+      id: c.id,
+      who: c.who,
+      label: c.label,
+      events: c.events.length,
+      next: upcoming[0] ? `${upcoming[0].title} · ${when.format(new Date(upcoming[0].startUtc!))}` : null,
+      lastDate: last ? day.format(new Date(last.length === 10 ? `${last}T12:00:00Z` : last)) : null,
+      ended: !upcoming.length,
+      error: c.fetchError,
+    };
+  });
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title="Settings" subtitle="How the planner thinks about your week." />
@@ -42,6 +72,7 @@ export default async function SettingsPage() {
         initial={{
           familyName: settings.familyName,
           homeZip: settings.homeZip ?? "",
+          homeAddress: settings.homeAddress ?? "",
           timezone: settings.timezone,
           appliances: settings.appliances,
           weeknightActiveMinutes: settings.weeknightActiveMinutes,
@@ -53,6 +84,11 @@ export default async function SettingsPage() {
           cookNightsPerWeek: settings.cookNightsPerWeek,
         }}
         initialGrillCaps={settings.grillCaps}
+      />
+      <SportsCalendars
+        members={members.map((m) => ({ id: m.id, name: m.name }))}
+        calendars={summaries}
+        driveTimes={!mapsEnabled() ? "no-key" : settings.homeAddress ? "on" : "no-address"}
       />
     </div>
   );

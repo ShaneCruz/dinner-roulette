@@ -104,6 +104,8 @@ export const familySettings = pgTable(
     id: integer("id").primaryKey().default(1),
     familyName: text("family_name").notNull(),
     homeZip: text("home_zip"),
+    /** Street address, for drive times to practices and games; never sent to the AI */
+    homeAddress: text("home_address"),
     /** Looked up from homeZip for weather forecasts */
     homeLatitude: doublePrecision("home_latitude"),
     homeLongitude: doublePrecision("home_longitude"),
@@ -173,6 +175,54 @@ export const member = pgTable(
   },
   (t) => [check("member_spice_range", sql`${t.spiceTolerance} between 0 and 3`)],
 );
+
+/** One event from a sports calendar feed, as cached. Times are UTC; all-day events carry a date instead. */
+export type SportEvent = {
+  uid: string;
+  startUtc: string | null;
+  endUtc: string | null;
+  allDayDate: string | null;
+  title: string;
+  status: "on" | "cancelled" | "tba";
+  changed: boolean;
+  optional: boolean;
+  /** "Arrival: 40 mins before kickoff" */
+  arriveEarlyMinutes: number | null;
+  /** Street address, without the field number */
+  place: string | null;
+  notes: string;
+};
+
+/**
+ * A team's calendar feed (TeamSnap, PlayerFirst, ...) for one family member,
+ * so tonight's practices and games can shape dinner.
+ */
+export const sportCalendar = pgTable(
+  "sport_calendar",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    /** e.g. "Soccer" */
+    label: text("label").notNull(),
+    url: text("url").notNull(),
+    events: jsonb("events").$type<SportEvent[]>().notNull().default([]),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    fetchError: text("fetch_error"),
+    ...timestamps,
+  },
+  (t) => [index("sport_calendar_member_idx").on(t.memberId)],
+);
+
+/** Drive time from home to a place, looked up once and kept. */
+export const driveTime = pgTable("drive_time", {
+  /** home address + destination, normalized */
+  key: text("key").primaryKey(),
+  minutes: integer("minutes").notNull(),
+  meters: integer("meters").notNull(),
+  ...timestamps,
+});
 
 /**
  * Date ranges that override a member's default presence: school breaks

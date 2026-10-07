@@ -5,6 +5,8 @@ import { useEffect, useState, useTransition } from "react";
 import { RecipePicture } from "@/components/recipe-picture";
 import { Badge, Button, Card, inputClass } from "@/components/ui";
 import type { DinnerTurn } from "@/lib/ai/dinner-picks";
+import { clockLabel } from "@/lib/reminders";
+import type { TonightEvent } from "@/lib/sports/schedule";
 import { CookTonight } from "../quick/cook-tonight";
 import { askForDinnerAction, type DinnerIdea } from "./actions";
 
@@ -30,6 +32,7 @@ type Session = {
   turns: DinnerTurn[];
   ideas: DinnerIdea[];
   note: string | null;
+  plan?: string | null;
 };
 
 const STORE_KEY = "dinner-ideas";
@@ -39,8 +42,10 @@ const STORE_KEY = "dinner-ideas";
  * the grill. Answers come from the family's own recipes, and she can reply
  * to steer them ("we've had a lot of pasta, something different").
  */
-export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) {
+export function AskForDinner({ tonightTitle, schedule }: { tonightTitle: string | null; schedule: TonightEvent[] }) {
   const [ask, setAsk] = useState("");
+  // Events she says aren't happening (or that she isn't driving to) stay out of the plan.
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [reply, setReply] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,13 +91,13 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
       setError(null);
       setLine(0);
       try {
-        const result = await askForDinnerAction(turns);
+        const result = await askForDinnerAction(turns, skipped);
         if ("error" in result) {
           setError(result.error);
           return;
         }
         turns[turns.length - 1] = { ask: message, shown: result.ideas.map((idea) => idea.slug) };
-        save({ date: result.tonight.date, turns, ideas: result.ideas, note: result.note });
+        save({ date: result.tonight.date, turns, ideas: result.ideas, note: result.note, plan: result.plan });
         setReply("");
       } catch {
         setError("That didn't work. Check your signal and try again.");
@@ -108,6 +113,13 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
         <h2 className="text-lg font-bold">🤔 What&apos;s tonight like?</h2>
         <p className="text-sm text-muted">Say what you&apos;re up against or in the mood for, and get dinners from your recipe box that fit.</p>
       </div>
+      {schedule.length ? (
+        <TonightSchedule
+          events={schedule}
+          skipped={skipped}
+          onToggle={(key) => setSkipped(skipped.includes(key) ? skipped.filter((k) => k !== key) : [...skipped, key])}
+        />
+      ) : null}
       <form
         className="space-y-2"
         onSubmit={(e) => {
@@ -158,6 +170,7 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
               ))}
             </ul>
           ) : null}
+          {session.plan ? <p className="rounded-2xl bg-plum-soft px-3 py-2 text-sm">🕒 {session.plan}</p> : null}
           {session.note ? <p className="text-sm">{session.note}</p> : null}
           {tonightTitle && session.ideas.length ? (
             <p className="text-xs text-muted">Tonight is planned as {tonightTitle}; picking one of these replaces it.</p>
@@ -183,7 +196,8 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
                     {idea.title}
                   </Link>
                   <p className="text-sm">{idea.why}</p>
-                  {idea.tip ? <p className="text-xs font-semibold text-plum">⏰ {idea.tip}</p> : null}
+                  {idea.timing ? <p className="text-xs font-semibold text-plum">⏰ {idea.timing}</p> : null}
+                  {idea.tip ? <p className="text-xs text-muted">💡 {idea.tip}</p> : null}
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone={idea.activeMinutes <= 20 ? "basil" : "neutral"}>⏱ {idea.activeMinutes} min hands-on</Badge>
                     {idea.totalMinutes - idea.activeMinutes >= 30 ? <Badge>{formatTotal(idea.totalMinutes)} total</Badge> : null}
@@ -251,6 +265,57 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
       {pending ? <p className="text-sm text-muted">{THINKING[line % THINKING.length]}</p> : null}
       {error ? <p className="text-sm font-semibold text-tomato-strong">{error}</p> : null}
     </Card>
+  );
+}
+
+/** Tonight's practices and games, each one tappable to leave it out. */
+function TonightSchedule({
+  events,
+  skipped,
+  onToggle,
+}: {
+  events: TonightEvent[];
+  skipped: string[];
+  onToggle: (key: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-surface/80 p-3">
+      <p className="text-sm font-bold">📅 Tonight</p>
+      <ul className="mt-1.5 space-y-1.5">
+        {events.map((e) => {
+          const cancelled = e.status === "cancelled";
+          const on = !cancelled && !skipped.includes(e.key);
+          return (
+            <li key={e.key} className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-basil"
+                checked={on}
+                disabled={cancelled}
+                onChange={() => onToggle(e.key)}
+                aria-label={`Plan around ${e.who}'s ${e.title}`}
+              />
+              <span className={on ? "" : "text-muted line-through"}>
+                <strong>{e.who}</strong> {e.title}
+                {e.allDay ? " (all day)" : e.start !== null ? ` ${clockLabel(e.start)}${e.end !== null ? `–${clockLabel(e.end)}` : ""}` : ""}
+                {e.placeName ? ` · ${e.placeName}` : ""}
+                {e.driveMinutes !== null ? ` · ${e.driveMinutes} min away` : ""}
+                {cancelled ? " · cancelled" : ""}
+                {e.status === "tba" ? " · time not final" : ""}
+                {e.optional ? " · optional" : ""}
+                {on && e.leaveAt !== null && e.backAt !== null ? (
+                  <span className="block text-xs text-muted">
+                    {e.arriveBy !== null ? `Be there by ${clockLabel(e.arriveBy)}. ` : ""}Leave {clockLabel(e.leaveAt)}, back about{" "}
+                    {clockLabel(e.backAt)}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-1.5 text-xs text-muted">Untick anything that isn&apos;t happening. Add what the calendar doesn&apos;t know below.</p>
+    </div>
   );
 }
 

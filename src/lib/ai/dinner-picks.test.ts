@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeCandidates, describeConversation, type DinnerCandidate } from "./dinner-picks";
+import { describeCandidates, describeConversation, readClock, startTiming, type DinnerCandidate } from "./dinner-picks";
 
 const base: DinnerCandidate = {
   id: "1",
@@ -61,5 +61,24 @@ describe("describeConversation", () => {
     expect(text).toContain("They said: Something easy");
     expect(text).toContain("You suggested: Baked Ziti, Chicken Alfredo");
     expect(text).toContain("Their newest message: We've had a lot of pasta lately, something different");
+  });
+});
+
+describe("start times", () => {
+  it("works back from when they'll eat, using the recipe's real total time", () => {
+    // An 8.5-hour pot roast to eat at 7:20 PM, asked at 10:24 AM
+    expect(startTiming(readClock("19:20"), 510, 10 * 60 + 24)).toBe("Start by 10:50 AM to eat at 7:20 PM");
+  });
+
+  it("says when it'd be ready if it's already too late to start on time", () => {
+    expect(startTiming(18 * 60, 360, 15 * 60)).toBe("Start now; ready about 9:00 PM");
+    expect(startTiming(18 * 60, 480, 16 * 60)).toBeNull();
+  });
+
+  it("only reads real clock times", () => {
+    expect(readClock("7:05")).toBe(425);
+    expect(readClock("25:00")).toBeNull();
+    expect(readClock("7pm")).toBeNull();
+    expect(readClock(null)).toBeNull();
   });
 });

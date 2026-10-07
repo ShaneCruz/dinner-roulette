@@ -23,9 +23,12 @@ import {
 } from "@/lib/recipes/store";
 import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
 import { aiEnabled } from "@/lib/ai/claude";
-import { loadDinnerCandidates, recommendDinners, type DinnerTurn } from "@/lib/ai/dinner-picks";
+import { loadDinnerCandidates, recommendDinners, startTiming, type DinnerTurn } from "@/lib/ai/dinner-picks";
+import { minutesIn } from "@/lib/reminders";
 import { recipePictureSrc } from "@/lib/recipes/picture";
 import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
+import { scheduleOn } from "@/lib/sports/store";
+import { describeSchedule } from "@/lib/sports/schedule";
 import { requireActingMember, requireParentMember } from "@/lib/session";
 import { z } from "zod";
 import { loadFamilyBrief } from "@/lib/ai/brief";
@@ -287,6 +290,8 @@ export type DinnerIdea = {
   picture: string | null;
   why: string;
   tip: string | null;
+  /** "Start by 10:50 AM to eat at 7:20 PM", worked out from the recipe's total time */
+  timing: string | null;
   activeMinutes: number;
   totalMinutes: number;
   method: string;
@@ -303,7 +308,9 @@ const turnsSchema = z
  */
 export async function askForDinnerAction(
   conversation: DinnerTurn[],
-): Promise<{ error: string } | { ideas: DinnerIdea[]; note: string | null; tonight: { date: string } }> {
+  /** Tonight's events the parent unticked (wrong, or not going) */
+  skipEvents: string[] = [],
+): Promise<{ error: string } | { ideas: DinnerIdea[]; note: string | null; plan: string | null; tonight: { date: string } }> {
   const { settings } = await requireParentMember();
   const parsed = turnsSchema.safeParse(conversation);
   if (!parsed.success || parsed.data[parsed.data.length - 1].ask.length < 3) {
@@ -313,10 +320,25 @@ export async function askForDinnerAction(
   const turns = parsed.data.slice(-5);
   if (!aiEnabled()) return { error: "AI isn't set up yet." };
   const today = todayIn(settings.timezone);
+  const nowMinutes = minutesIn(settings.timezone);
   try {
-    const [candidates, brief] = await Promise.all([loadDinnerCandidates(db, today), loadFamilyBrief(db)]);
+    const [candidates, brief, events] = await Promise.all([
+      loadDinnerCandidates(db, today),
+      loadFamilyBrief(db),
+      scheduleOn(db, settings, today),
+    ]);
+    const skip = new Set(skipEvents.filter((key) => typeof key === "string").slice(0, 50));
+    const going = events.filter((e) => e.status !== "cancelled" && !skip.has(e.key));
     if (!candidates.length) return { error: "Add a few dinners to the recipe box first." };
-    const { picks, note } = await recommendDinners(turns, candidates, today, brief, settings.dinnerTime);
+    const { picks, note, plan } = await recommendDinners(
+      turns,
+      candidates,
+      today,
+      brief,
+      settings.dinnerTime,
+      going.length ? describeSchedule(going) : null,
+      nowMinutes,
+    );
     const bySlug = new Map(candidates.map((c) => [c.slug, c]));
     const rows = await listRecipes(db);
     const pictures = new Map(rows.map((r) => [r.id, recipePictureSrc(r)]));
@@ -330,12 +352,14 @@ export async function askForDinnerAction(
           picture: pictures.get(c.id) ?? null,
           why: p.why,
           tip: p.tip,
+          timing: startTiming(p.eatAt, c.totalMinutes, nowMinutes),
           activeMinutes: c.activeMinutes,
           totalMinutes: c.totalMinutes,
           method: COOK_METHOD_LABELS[c.method],
         };
       }),
       note: picks.length ? note : note ?? "Nothing in the recipe box fits that. Try loosening it a little.",
+      plan,
       tonight: { date: today },
     };
   } catch (error) {

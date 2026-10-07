@@ -7,6 +7,7 @@ import { addDays, daysBetween } from "@/lib/presence";
 import { averageRatings } from "@/lib/ratings/store";
 import { COOK_METHOD_LABELS, type CookMethod } from "@/lib/recipes/schema";
 import { formatDay } from "@/lib/plan/week";
+import { clockLabel } from "@/lib/reminders";
 import { structured } from "./claude";
 import { describeFamily, type FamilyBrief } from "./recipes";
 
@@ -85,6 +86,27 @@ export async function loadDinnerCandidates(db: Database, today: string): Promise
   });
 }
 
+/** "18:30" → 1110 minutes after midnight; anything else → null. */
+export function readClock(value: string | null | undefined): number | null {
+  const m = value?.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const minutes = Number(m[1]) * 60 + Number(m[2]);
+  return Number(m[1]) < 24 && Number(m[2]) < 60 ? minutes : null;
+}
+
+/**
+ * When to start a dinner to eat at a given time, worked out here rather than
+ * by Claude, which is unreliable at clock arithmetic.
+ */
+export function startTiming(eatAt: number | null, totalMinutes: number, nowMinutes: number): string | null {
+  if (eatAt === null) return null;
+  const startBy = eatAt - totalMinutes;
+  if (startBy >= nowMinutes) return `Start by ${clockLabel(startBy)} to eat at ${clockLabel(eatAt)}`;
+  const ready = nowMinutes + totalMinutes;
+  // Too late for that time; say when it'd be ready if started now, unless that's silly late.
+  return ready < 22 * 60 ? `Start now; ready about ${clockLabel(ready)}` : null;
+}
+
 /** The recipe box as a compact table, one dinner per line, for Claude to choose from. */
 export function describeCandidates(candidates: DinnerCandidate[], today: string): string {
   return candidates
@@ -120,14 +142,28 @@ const picksSchema = z.object({
       z.object({
         slug: z.string().describe("Exactly as in the list"),
         why: z.string().describe("One short sentence tying it to what they asked for"),
-        tip: z.string().nullable().describe("A practical timing note when it matters, e.g. 'Start it by 10am', else null"),
+        eatAt: z
+          .string()
+          .nullable()
+          .describe("When they'd sit down to eat this tonight, 24-hour 'HH:MM', given the schedule and usual dinner time"),
+        tip: z.string().nullable().describe("An optional short practical note with no clock times (the app adds start times), else null"),
       }),
     )
     .describe("3 to 5 dinners from the list, best first"),
   note: z.string().nullable().describe("Only if nothing fits well: say so in one friendly sentence, and what's closest"),
+  plan: z
+    .string()
+    .nullable()
+    .describe("When there's a schedule tonight: one or two sentences on when to cook around it. Otherwise null"),
 });
 
-export type DinnerPick = { slug: string; why: string; tip: string | null };
+export type DinnerPick = {
+  slug: string;
+  why: string;
+  tip: string | null;
+  /** When they'd eat it, minutes after midnight; the app works out when to start */
+  eatAt: number | null;
+};
 
 /** One round of the back-and-forth: what the parent said, and the dinners shown in answer. */
 export type DinnerTurn = { ask: string; shown: string[] };
@@ -158,7 +194,11 @@ export async function recommendDinners(
   today: string,
   brief: FamilyBrief,
   dinnerTime: string,
-): Promise<{ picks: DinnerPick[]; note: string | null }> {
+  /** Tonight's practices and games, already worked out (see describeSchedule), or null */
+  schedule: string | null,
+  /** Minutes after midnight right now, in the family's time zone */
+  nowMinutes: number,
+): Promise<{ picks: DinnerPick[]; note: string | null; plan: string | null }> {
   const result = await structured({
     feature: "dinner ideas",
     tier: "balanced",
@@ -171,14 +211,16 @@ How to choose:
 - Avoid dinners marked TOO RECENT or already planned on another night, unless they ask for that dish by name or nothing else fits; then say so in "why".
 - Among dinners that fit, prefer ones the family rates highly and ones they haven't had in a while. Mix it up: don't recommend three of the same cuisine or protein unless asked.
 - Only recommend dinners from the list. Never invent one, and never suggest cooking one a different way than its method (an oven dish is not a slow cooker dish) unless its own description says it can be.
-- "why" is one short, warm sentence about why it suits tonight specifically (not a description of the dish). "tip" is for timing that matters, worked out back from dinner time ("Start it by 10am"), otherwise null.
+- "why" is one short, warm sentence about why it suits tonight specifically (not a description of the dish). "eatAt" is when they'd sit down to eat it. Don't work out start times anywhere, not in "why", "tip" or "plan": the app does that from each recipe's own total time. "tip" is an optional practical note without clock times ("Brown the beef first"), otherwise null.
+- Don't suggest a dinner that can't be ready by a sensible dinner time if they started now; check each total time against the current time.
 - If fewer than 3 fit well, return what fits and use "note" to say so honestly. Otherwise "note" is null.
+- When there's a schedule, plan around it. The leave and return times are worked out already; trust them and don't redo the arithmetic. Look for the real window to cook: earlier in the day (slow cooker, make-ahead), between drop-off and pick-up when the drive is short, or something quick once everyone's home. Say it in "plan" in one or two practical sentences about the window ("Alexa's out 5:24 to about 7:20, so either have dinner done before she leaves or eat when she's back"), and fit the picks and their eatAt to that window. A cancelled or skipped event isn't listed; don't plan around it.
 - A follow-up message refines the earlier ones: keep every earlier constraint unless they change it, and don't suggest a dinner you already suggested unless they ask to go back to it. "We've had a lot of pasta" means no pasta; "something different" means different from what you suggested.
 
 About the family:
 ${describeFamily(brief)}`,
-    content: `Today is ${formatDay(today, "long")}. Dinner is usually at ${dinnerTime}.
-
+    content: `Today is ${formatDay(today, "long")}. It's ${clockLabel(nowMinutes)} now. Dinner is usually at ${dinnerTime}.
+${schedule ? `\nTonight's practices and games (from the kids' team calendars):\n${schedule}\n` : ""}
 ${describeConversation(turns, new Map(candidates.map((c) => [c.slug, c.title])))}
 
 Their dinners (slug | title | cuisine | method | time | health | heat | tags | history | rating | description):
@@ -189,9 +231,9 @@ ${describeCandidates(candidates, today)}`,
   const known = new Set(candidates.map((c) => c.slug));
   const seen = new Set<string>();
   const picks = result.picks
-    .map((p) => ({ slug: p.slug.trim(), why: p.why.trim(), tip: p.tip?.trim() || null }))
+    .map((p) => ({ slug: p.slug.trim(), why: p.why.trim(), tip: p.tip?.trim() || null, eatAt: readClock(p.eatAt) }))
     .filter((p) => known.has(p.slug) && !seen.has(p.slug) && seen.add(p.slug))
     .slice(0, 5);
   // A note is for when little fits; with a full list it's just noise.
-  return { picks, note: picks.length < 3 ? result.note?.trim() || null : null };
+  return { picks, note: picks.length < 3 ? result.note?.trim() || null : null, plan: schedule ? result.plan?.trim() || null : null };
 }

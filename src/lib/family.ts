@@ -82,6 +82,13 @@ export const settingsInputSchema = z.object({
   chaosSliceEnabled: z.boolean(),
   weekStartsOn: z.number().int().min(0).max(6).default(0),
   usualServings: z.number().int().min(1, "Make at least 1 serving").max(40).nullable().default(null),
+  homeAddress: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .default(null),
   cookNightsPerWeek: z.number().int().min(1).max(7).default(3),
 });
 export type SettingsInput = z.input<typeof settingsInputSchema>;

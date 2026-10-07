@@ -46,6 +46,18 @@ export function SettingsForm({
             onChange={(e) => setSettings({ ...settings, familyName: e.target.value })}
           />
         </Field>
+        <Field
+          label="Home address"
+          hint="For drive times to practices and games. It's only sent to Google Maps, never to the AI."
+        >
+          <input
+            className={inputClass}
+            autoComplete="street-address"
+            placeholder="123 Main St, Springfield, IL"
+            value={settings.homeAddress ?? ""}
+            onChange={(e) => setSettings({ ...settings, homeAddress: e.target.value })}
+          />
+        </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Home ZIP code">
             <input
