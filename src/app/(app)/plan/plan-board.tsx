@@ -46,6 +46,7 @@ export function PlanBoard({
   canEdit,
   weeknightActiveMinutes,
   cookNightsPerWeek,
+  canAsk,
 }: {
   nights: NightView[];
   options: RecipeOption[];
@@ -58,6 +59,8 @@ export function PlanBoard({
   canEdit: boolean;
   weeknightActiveMinutes: number;
   cookNightsPerWeek: number;
+  /** AI is on, so the picker can offer "Help me choose" */
+  canAsk: boolean;
 }) {
   const [picking, setPicking] = useState<NightView | null>(null);
   const [pending, startTransition] = useTransition();
@@ -218,6 +221,8 @@ export function PlanBoard({
       {picking ? (
         <RecipePicker
           night={picking}
+          today={today}
+          canAsk={canAsk}
           options={options}
           ranking={rankings[picking.date] ?? []}
           favoredName={members.find((m) => m.id === picking.favoredMemberId)?.name ?? null}

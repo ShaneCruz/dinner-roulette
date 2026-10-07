@@ -71,6 +71,8 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
 
       {acting.role === "parent" && aiEnabled() && !archivedOnly ? (
         <AskForDinner
+          night={todayIn(settings.timezone)}
+          today={todayIn(settings.timezone)}
           tonightTitle={await tonightsDinner(settings.timezone)}
           schedule={await scheduleOn(db, settings, todayIn(settings.timezone))}
         />

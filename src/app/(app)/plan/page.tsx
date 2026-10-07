@@ -6,6 +6,7 @@ import { addDays, todayIn } from "@/lib/presence";
 import { getActiveMembers, requireActingMember } from "@/lib/session";
 import { PlanBoard } from "./plan-board";
 import { Tip } from "@/components/tip";
+import { aiEnabled } from "@/lib/ai/claude";
 
 export const metadata = { title: "This week" };
 
@@ -28,7 +29,11 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
     <div>
       <PageHeader
         title={isCurrent ? "This week" : `Week of ${formatDay(weekStart)}`}
-        subtitle={`${formatDay(dates[0])} – ${formatDay(dates[6])} · ${dinners} of ${settings.cookNightsPerWeek} dinners planned`}
+        subtitle={`${formatDay(dates[0])} – ${formatDay(dates[6])} · ${
+          dinners > settings.cookNightsPerWeek
+            ? `${dinners} dinners planned (you usually cook ${settings.cookNightsPerWeek})`
+            : `${dinners} of ${settings.cookNightsPerWeek} dinners planned`
+        }`}
         actions={
           <>
             <ButtonLink href={`/grocery?week=${weekStart}`} variant="secondary" size="sm">
@@ -83,6 +88,7 @@ export default async function PlanPage({ searchParams }: PageProps<"/plan">) {
         canEdit={acting.role === "parent"}
         weeknightActiveMinutes={settings.weeknightActiveMinutes}
         cookNightsPerWeek={settings.cookNightsPerWeek}
+        canAsk={aiEnabled()}
         members={members.map((m) => ({
           id: m.id,
           name: m.name,

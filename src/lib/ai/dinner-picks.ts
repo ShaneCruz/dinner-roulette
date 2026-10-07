@@ -35,14 +35,14 @@ export type DinnerCandidate = {
 };
 
 /** Every dinner in the box (drafts too: plenty of imports stay drafts), with its history. */
-export async function loadDinnerCandidates(db: Database, today: string): Promise<DinnerCandidate[]> {
+export async function loadDinnerCandidates(db: Database, night: string): Promise<DinnerCandidate[]> {
   const [[settings], rows, cooked, planned, ratings] = await Promise.all([
     db.select({ cooldown: familySettings.defaultCooldownDays }).from(familySettings).limit(1),
     db.select().from(recipe).where(and(eq(recipe.kind, "main"), isNull(recipe.archivedAt))),
     db
       .select({ recipeId: plannedMeal.recipeId, last: max(plannedMeal.date) })
       .from(plannedMeal)
-      .where(and(eq(plannedMeal.status, "cooked"), lte(plannedMeal.date, today)))
+      .where(and(eq(plannedMeal.status, "cooked"), lte(plannedMeal.date, night)))
       .groupBy(plannedMeal.recipeId),
     db
       .select({ recipeId: plannedMeal.recipeId, date: plannedMeal.date })
@@ -51,8 +51,8 @@ export async function loadDinnerCandidates(db: Database, today: string): Promise
         and(
           eq(plannedMeal.status, "planned"),
           eq(plannedMeal.nightType, "cook"),
-          gte(plannedMeal.date, addDays(today, -3)),
-          lte(plannedMeal.date, addDays(today, 7)),
+          gte(plannedMeal.date, addDays(night, -3)),
+          lte(plannedMeal.date, addDays(night, 7)),
         ),
       ),
     averageRatings(db),
@@ -64,8 +64,8 @@ export async function loadDinnerCandidates(db: Database, today: string): Promise
   }
   return rows.map((r) => {
     const mine = stars.get(r.id);
-    // Tonight's own dinner doesn't count as "already planned": she may be replacing it.
-    const elsewhere = planned.filter((p) => p.recipeId === r.id && p.date !== today).map((p) => p.date).sort();
+    // The night's own dinner doesn't count as "already planned": she may be replacing it.
+    const elsewhere = planned.filter((p) => p.recipeId === r.id && p.date !== night).map((p) => p.date).sort();
     return {
       id: r.id,
       slug: r.slug,
@@ -191,13 +191,14 @@ export function describeConversation(turns: DinnerTurn[], titles: Map<string, st
 export async function recommendDinners(
   turns: DinnerTurn[],
   candidates: DinnerCandidate[],
-  today: string,
+  /** The night being planned */
+  night: string,
   brief: FamilyBrief,
   dinnerTime: string,
-  /** Tonight's practices and games, already worked out (see describeSchedule), or null */
+  /** That night's practices and games, already worked out (see describeSchedule), or null */
   schedule: string | null,
-  /** Minutes after midnight right now, in the family's time zone */
-  nowMinutes: number,
+  /** Today, and minutes after midnight right now, in the family's time zone */
+  now: { today: string; minutes: number },
 ): Promise<{ picks: DinnerPick[]; note: string | null; plan: string | null }> {
   const result = await structured({
     feature: "dinner ideas",
@@ -212,19 +213,22 @@ How to choose:
 - Among dinners that fit, prefer ones the family rates highly and ones they haven't had in a while. Mix it up: don't recommend three of the same cuisine or protein unless asked.
 - Only recommend dinners from the list. Never invent one, and never suggest cooking one a different way than its method (an oven dish is not a slow cooker dish) unless its own description says it can be.
 - "why" is one short, warm sentence about why it suits tonight specifically (not a description of the dish). "eatAt" is when they'd sit down to eat it. Don't work out start times anywhere, not in "why", "tip" or "plan": the app does that from each recipe's own total time. "tip" is an optional practical note without clock times ("Brown the beef first"), otherwise null.
-- Don't suggest a dinner that can't be ready by a sensible dinner time if they started now; check each total time against the current time.
 - If fewer than 3 fit well, return what fits and use "note" to say so honestly. Otherwise "note" is null.
 - When there's a schedule, plan around it. The leave and return times are worked out already; trust them and don't redo the arithmetic. Look for the real window to cook: earlier in the day (slow cooker, make-ahead), between drop-off and pick-up when the drive is short, or something quick once everyone's home. Say it in "plan" in one or two practical sentences about the window ("Alexa's out 5:24 to about 7:20, so either have dinner done before she leaves or eat when she's back"), and fit the picks and their eatAt to that window. A cancelled or skipped event isn't listed; don't plan around it.
 - A follow-up message refines the earlier ones: keep every earlier constraint unless they change it, and don't suggest a dinner you already suggested unless they ask to go back to it. "We've had a lot of pasta" means no pasta; "something different" means different from what you suggested.
 
 About the family:
 ${describeFamily(brief)}`,
-    content: `Today is ${formatDay(today, "long")}. It's ${clockLabel(nowMinutes)} now. Dinner is usually at ${dinnerTime}.
-${schedule ? `\nTonight's practices and games (from the kids' team calendars):\n${schedule}\n` : ""}
+    content: `${
+      night === now.today
+        ? `This is for tonight, ${formatDay(night, "long")}. It's ${clockLabel(now.minutes)} now, so don't suggest a dinner that couldn't be ready by a sensible dinner time if they started now; check each total time against the clock.`
+        : `This is for dinner on ${formatDay(night, "long")} (today is ${formatDay(now.today, "long")}), so there's time to plan, shop and start early.`
+    } Dinner is usually at ${dinnerTime}.
+${schedule ? `\nThat night's practices and games (from the kids' team calendars):\n${schedule}\n` : ""}
 ${describeConversation(turns, new Map(candidates.map((c) => [c.slug, c.title])))}
 
 Their dinners (slug | title | cuisine | method | time | health | heat | tags | history | rating | description):
-${describeCandidates(candidates, today)}`,
+${describeCandidates(candidates, night)}`,
     schema: picksSchema,
   });
 

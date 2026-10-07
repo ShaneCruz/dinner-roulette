@@ -30,7 +30,7 @@ import { addCookPhoto, deleteCookPhoto, getCookPhoto, latestCookPhotos, promoteC
 import { plannedMeal } from "@/db/schema";
 import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
 import { scheduleOn } from "@/lib/sports/store";
-import { describeSchedule } from "@/lib/sports/schedule";
+import { describeSchedule, type TonightEvent } from "@/lib/sports/schedule";
 import { requireActingMember, requireParentMember } from "@/lib/session";
 import { z } from "zod";
 import { loadFamilyBrief } from "@/lib/ai/brief";
@@ -45,7 +45,7 @@ import {
   servingsRule,
   servingsToMake,
 } from "@/lib/plan/store";
-import { todayIn } from "@/lib/presence";
+import { addDays, todayIn } from "@/lib/presence";
 import { listRecipes } from "@/lib/recipes/store";
 
 export async function saveRecipeAction(
@@ -294,6 +294,18 @@ export async function findSourcePictureAction(recipeId: string): Promise<{ error
   revalidatePath("/", "layout");
 }
 
+/** Tonight or a night in the next three weeks: what the plan board can pick for. */
+function isPlannableNight(date: string, today: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= today && date <= addDays(today, 21);
+}
+
+/** A night's practices and games, for the assistant in the dinner picker. */
+export async function scheduleForNightAction(night: string): Promise<TonightEvent[]> {
+  const { settings } = await requireParentMember();
+  if (!isPlannableNight(night, todayIn(settings.timezone))) return [];
+  return scheduleOn(db, settings, night);
+}
+
 export type DinnerIdea = {
   id: string;
   slug: string;
@@ -321,8 +333,10 @@ const turnsSchema = z
  */
 export async function askForDinnerAction(
   conversation: DinnerTurn[],
-  /** Tonight's events the parent unticked (wrong, or not going) */
+  /** That night's events the parent unticked (wrong, or not going) */
   skipEvents: string[] = [],
+  /** The night being planned; tonight when left out */
+  night?: string,
 ): Promise<{ error: string } | { ideas: DinnerIdea[]; note: string | null; plan: string | null; tonight: { date: string } }> {
   const { settings } = await requireParentMember();
   const parsed = turnsSchema.safeParse(conversation);
@@ -334,11 +348,13 @@ export async function askForDinnerAction(
   if (!aiEnabled()) return { error: "AI isn't set up yet." };
   const today = todayIn(settings.timezone);
   const nowMinutes = minutesIn(settings.timezone);
+  const date = night ?? today;
+  if (!isPlannableNight(date, today)) return { error: "Pick a night in the next few weeks." };
   try {
     const [candidates, brief, events] = await Promise.all([
-      loadDinnerCandidates(db, today),
+      loadDinnerCandidates(db, date),
       loadFamilyBrief(db),
-      scheduleOn(db, settings, today),
+      scheduleOn(db, settings, date),
     ]);
     const skip = new Set(skipEvents.filter((key) => typeof key === "string").slice(0, 50));
     const going = events.filter((e) => e.status !== "cancelled" && !skip.has(e.key));
@@ -346,11 +362,11 @@ export async function askForDinnerAction(
     const { picks, note, plan } = await recommendDinners(
       turns,
       candidates,
-      today,
+      date,
       brief,
       settings.dinnerTime,
       going.length ? describeSchedule(going) : null,
-      nowMinutes,
+      { today, minutes: nowMinutes },
     );
     const bySlug = new Map(candidates.map((c) => [c.slug, c]));
     const made = await latestCookPhotos(db, picks.map((p) => bySlug.get(p.slug)!.id));
@@ -366,7 +382,7 @@ export async function askForDinnerAction(
           picture: pictures.get(c.id) ?? null,
           why: p.why,
           tip: p.tip,
-          timing: startTiming(p.eatAt, c.totalMinutes, nowMinutes),
+          timing: startTiming(p.eatAt, c.totalMinutes, date === today ? nowMinutes : 0),
           lastMade: made.has(c.id) ? { src: cookPhotoSrc(made.get(c.id)!.id), madeOn: made.get(c.id)!.madeOn } : null,
           activeMinutes: c.activeMinutes,
           totalMinutes: c.totalMinutes,
@@ -375,7 +391,7 @@ export async function askForDinnerAction(
       }),
       note: picks.length ? note : note ?? "Nothing in the recipe box fits that. Try loosening it a little.",
       plan,
-      tonight: { date: today },
+      tonight: { date },
     };
   } catch (error) {
     console.error("Dinner ideas failed", error);

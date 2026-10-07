@@ -12,6 +12,7 @@ import { scaleIngredient } from "@/lib/recipes/scale";
 import { SideSearch } from "./side-search";
 import { RecipePicture } from "@/components/recipe-picture";
 import { cookPhotoSrc, recipePictureSrc } from "@/lib/recipes/picture";
+import { AskForDinner } from "../recipes/ask-for-dinner";
 
 export function RecipePicker({
   night,
@@ -21,8 +22,13 @@ export function RecipePicker({
   plannedThisWeek,
   ranking,
   favoredName,
+  today,
+  canAsk,
 }: {
   night: NightView;
+  today: string;
+  /** AI is on, so "Help me choose" can be offered */
+  canAsk: boolean;
   options: RecipeOption[];
   /** Engine's view of every dinner for this night */
   ranking: NightRanking;
@@ -36,6 +42,8 @@ export function RecipePicker({
   const [mainId, setMainId] = useState<string | null>(night.recipeId);
   const [sideIds, setSideIds] = useState<string[]>(night.sideRecipeIds);
   const [step, setStep] = useState<"main" | "preview" | "sides">("main");
+  // "Help me choose": the assistant in place of the list, until she goes back to browsing.
+  const [asking, setAsking] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, RecipePreview | { error: string }>>({});
   const [ideas, setIdeas] = useState<SideIdea[] | null>(null);
@@ -115,16 +123,36 @@ export function RecipePicker({
           </button>
         </div>
 
-        {step === "main" ? (
-          <>
-            <input
-              className={cx(inputClass, "mb-3")}
-              type="search"
-              placeholder="Search dinners…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
+        {step === "main" && asking ? (
+          <div className="-mx-2 flex-1 space-y-3 overflow-y-auto px-2">
+            <button type="button" onClick={() => setAsking(false)} className="text-sm font-semibold text-muted hover:text-foreground">
+              ← Browse the list instead
+            </button>
+            <AskForDinner
+              night={night.date}
+              today={today}
+              tonightTitle={options.find((o) => o.id === night.recipeId)?.title ?? null}
+              onChoose={openPreview}
+              embedded
             />
+          </div>
+        ) : step === "main" ? (
+          <>
+            <div className="mb-3 flex gap-2">
+              <input
+                className={inputClass}
+                type="search"
+                placeholder="Search dinners…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoFocus
+              />
+              {canAsk ? (
+                <Button type="button" variant="secondary" onClick={() => setAsking(true)} className="shrink-0">
+                  ✨ Help me choose
+                </Button>
+              ) : null}
+            </div>
             <div className="-mx-2 flex-1 overflow-y-auto px-2">
               <OptionList
                 title="Best fits tonight"
