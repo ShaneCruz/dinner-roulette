@@ -95,6 +95,7 @@ export function MadeGallery({
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setOpen(null)}>
+          {/* The viewer sits on a black overlay in light and dark mode alike, so its controls use fixed colors. */}
           <div
             role="dialog"
             aria-modal="true"
@@ -114,7 +115,7 @@ export function MadeGallery({
                   type="button"
                   disabled={pending}
                   onClick={() => act(() => makeCookPhotoMainAction(open.id), "✓ That's the recipe's main photo now.")}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-foreground disabled:opacity-60"
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-neutral-900 disabled:opacity-60"
                 >
                   Use as the main photo
                 </button>
@@ -127,14 +128,14 @@ export function MadeGallery({
                     value={newDate}
                     max={today}
                     onChange={(e) => setNewDate(e.target.value)}
-                    className="rounded-full bg-white px-3 py-1.5 text-sm text-foreground"
+                    className="rounded-full bg-white px-3 py-1.5 text-sm text-neutral-900 [color-scheme:light]"
                   />
                   {newDate && newDate !== open.madeOn ? (
                     <button
                       type="button"
                       disabled={pending}
                       onClick={() => act(() => redateCookPhotoAction(open.id, newDate), `Moved to ${formatDay(newDate)}.`)}
-                      className="rounded-full bg-white px-3 py-1.5 font-semibold text-foreground disabled:opacity-60"
+                      className="rounded-full bg-white px-3 py-1.5 font-semibold text-neutral-900 disabled:opacity-60"
                     >
                       Save date
                     </button>

@@ -234,7 +234,7 @@ export function CookMode({
                   <button
                     type="button"
                     onClick={() => dismiss(t.id)}
-                    className={cx("rounded-full px-2", t.ringing ? "bg-white text-tomato-strong" : "text-muted")}
+                    className={cx("rounded-full px-2", t.ringing ? "bg-white text-[#c23a22]" : "text-muted")}
                     aria-label={t.ringing ? "Stop the alarm" : "Cancel timer"}
                   >
                     {t.ringing ? "Stop" : "✕"}
