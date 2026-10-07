@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeCandidates, type DinnerCandidate } from "./dinner-picks";
+import { describeCandidates, describeConversation, type DinnerCandidate } from "./dinner-picks";
 
 const base: DinnerCandidate = {
   id: "1",
@@ -37,5 +37,29 @@ describe("describeCandidates", () => {
     const longAgo = describeCandidates([{ ...base, lastCooked: "2026-08-01" }], "2026-10-07");
     expect(longAgo).toContain("days ago");
     expect(longAgo).not.toContain("TOO RECENT");
+  });
+});
+
+describe("describeConversation", () => {
+  const titles = new Map([
+    ["baked-ziti", "Baked Ziti"],
+    ["chicken-alfredo", "Chicken Alfredo"],
+  ]);
+
+  it("is just the ask the first time", () => {
+    expect(describeConversation([{ ask: "Something easy", shown: [] }], titles)).toBe("What tonight looks like: Something easy");
+  });
+
+  it("carries what was said and suggested into a follow-up", () => {
+    const text = describeConversation(
+      [
+        { ask: "Something easy", shown: ["baked-ziti", "chicken-alfredo"] },
+        { ask: "We've had a lot of pasta lately, something different", shown: [] },
+      ],
+      titles,
+    );
+    expect(text).toContain("They said: Something easy");
+    expect(text).toContain("You suggested: Baked Ziti, Chicken Alfredo");
+    expect(text).toContain("Their newest message: We've had a lot of pasta lately, something different");
   });
 });

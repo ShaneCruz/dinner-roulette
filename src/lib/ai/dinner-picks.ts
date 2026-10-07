@@ -129,13 +129,31 @@ const picksSchema = z.object({
 
 export type DinnerPick = { slug: string; why: string; tip: string | null };
 
+/** One round of the back-and-forth: what the parent said, and the dinners shown in answer. */
+export type DinnerTurn = { ask: string; shown: string[] };
+
+/**
+ * The conversation so far, for a follow-up like "we've had a lot of pasta,
+ * something different": every earlier message and what was suggested, then
+ * the newest message, which refines rather than replaces them.
+ */
+export function describeConversation(turns: DinnerTurn[], titles: Map<string, string>): string {
+  const latest = turns[turns.length - 1];
+  const earlier = turns.slice(0, -1);
+  if (!earlier.length) return `What tonight looks like: ${latest.ask}`;
+  const rounds = earlier.map(
+    (turn) => `They said: ${turn.ask}\nYou suggested: ${turn.shown.map((slug) => titles.get(slug) ?? slug).join(", ") || "nothing"}`,
+  );
+  return `The conversation so far:\n${rounds.join("\n\n")}\n\nTheir newest message: ${latest.ask}`;
+}
+
 /**
  * Picks dinners from the family's own recipe box for what tonight looks
  * like: "I'm home this morning, slow cooker?", "soccer until 6, super easy",
  * "anything but pasta", "Dad wants to grill".
  */
 export async function recommendDinners(
-  request: string,
+  turns: DinnerTurn[],
   candidates: DinnerCandidate[],
   today: string,
   brief: FamilyBrief,
@@ -155,12 +173,13 @@ How to choose:
 - Only recommend dinners from the list. Never invent one, and never suggest cooking one a different way than its method (an oven dish is not a slow cooker dish) unless its own description says it can be.
 - "why" is one short, warm sentence about why it suits tonight specifically (not a description of the dish). "tip" is for timing that matters, worked out back from dinner time ("Start it by 10am"), otherwise null.
 - If fewer than 3 fit well, return what fits and use "note" to say so honestly. Otherwise "note" is null.
+- A follow-up message refines the earlier ones: keep every earlier constraint unless they change it, and don't suggest a dinner you already suggested unless they ask to go back to it. "We've had a lot of pasta" means no pasta; "something different" means different from what you suggested.
 
 About the family:
 ${describeFamily(brief)}`,
     content: `Today is ${formatDay(today, "long")}. Dinner is usually at ${dinnerTime}.
 
-What tonight looks like: ${request}
+${describeConversation(turns, new Map(candidates.map((c) => [c.slug, c.title])))}
 
 Their dinners (slug | title | cuisine | method | time | health | heat | tags | history | rating | description):
 ${describeCandidates(candidates, today)}`,

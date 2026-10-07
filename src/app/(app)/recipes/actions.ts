@@ -23,7 +23,7 @@ import {
 } from "@/lib/recipes/store";
 import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
 import { aiEnabled } from "@/lib/ai/claude";
-import { loadDinnerCandidates, recommendDinners } from "@/lib/ai/dinner-picks";
+import { loadDinnerCandidates, recommendDinners, type DinnerTurn } from "@/lib/ai/dinner-picks";
 import { recipePictureSrc } from "@/lib/recipes/picture";
 import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
 import { requireActingMember, requireParentMember } from "@/lib/session";
@@ -292,22 +292,31 @@ export type DinnerIdea = {
   method: string;
 };
 
+const turnsSchema = z
+  .array(z.object({ ask: z.string().trim().min(1).max(500), shown: z.array(z.string().max(200)).max(5) }))
+  .min(1);
+
 /**
  * "What should we have tonight?" in the family's own words: picks from the
- * recipe box that fit, skipping what they had lately.
+ * recipe box that fit, skipping what they had lately. Follow-ups ("we've had
+ * a lot of pasta, something different") come with the earlier rounds.
  */
 export async function askForDinnerAction(
-  request: string,
+  conversation: DinnerTurn[],
 ): Promise<{ error: string } | { ideas: DinnerIdea[]; note: string | null; tonight: { date: string } }> {
   const { settings } = await requireParentMember();
-  const ask = request.trim().slice(0, 500);
-  if (ask.length < 3) return { error: "Tell me a little about tonight first." };
+  const parsed = turnsSchema.safeParse(conversation);
+  if (!parsed.success || parsed.data[parsed.data.length - 1].ask.length < 3) {
+    return { error: "Tell me a little about tonight first." };
+  }
+  // The newest message and the few rounds before it are plenty.
+  const turns = parsed.data.slice(-5);
   if (!aiEnabled()) return { error: "AI isn't set up yet." };
   const today = todayIn(settings.timezone);
   try {
     const [candidates, brief] = await Promise.all([loadDinnerCandidates(db, today), loadFamilyBrief(db)]);
     if (!candidates.length) return { error: "Add a few dinners to the recipe box first." };
-    const { picks, note } = await recommendDinners(ask, candidates, today, brief, settings.dinnerTime);
+    const { picks, note } = await recommendDinners(turns, candidates, today, brief, settings.dinnerTime);
     const bySlug = new Map(candidates.map((c) => [c.slug, c]));
     const rows = await listRecipes(db);
     const pictures = new Map(rows.map((r) => [r.id, recipePictureSrc(r)]));

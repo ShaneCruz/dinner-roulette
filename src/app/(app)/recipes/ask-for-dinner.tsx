@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { RecipePicture } from "@/components/recipe-picture";
 import { Badge, Button, Card, inputClass } from "@/components/ui";
+import type { DinnerTurn } from "@/lib/ai/dinner-picks";
 import { CookTonight } from "../quick/cook-tonight";
 import { askForDinnerAction, type DinnerIdea } from "./actions";
 
@@ -14,32 +15,46 @@ const STARTERS = [
   { label: "🔥 Grill night", text: "We want to grill tonight." },
 ];
 
+/** Quick replies once there are suggestions on screen. */
+const NUDGES = [
+  { label: "🔄 Something different", text: "None of those. Show me something different." },
+  { label: "⚡ Even easier", text: "Those are too much work tonight. Even easier, please." },
+  { label: "🥗 Lighter", text: "Something lighter and healthier." },
+];
+
 const THINKING = ["Looking through the recipe box…", "Checking what you've had lately…", "Weighing up tonight…"];
 
-type Answer = { ask: string; ideas: DinnerIdea[]; note: string | null; tonight: { date: string } };
+/** The back-and-forth so far, and the latest suggestions. */
+type Session = {
+  date: string;
+  turns: DinnerTurn[];
+  ideas: DinnerIdea[];
+  note: string | null;
+};
 
 const STORE_KEY = "dinner-ideas";
 
 /**
  * "What should we have tonight?" in plain words: time, energy, cravings,
- * the grill. Answers come from the family's own recipes.
+ * the grill. Answers come from the family's own recipes, and she can reply
+ * to steer them ("we've had a lot of pasta, something different").
  */
 export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) {
   const [ask, setAsk] = useState("");
-  const [answer, setAnswer] = useState<Answer | null>(null);
+  const [reply, setReply] = useState("");
+  const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [line, setLine] = useState(0);
 
-  // Bring back the last answer after a look at one of the recipes, as long as it was for today.
+  // Bring back the conversation after a look at one of the recipes, as long as it was for today.
   useEffect(() => {
     try {
-      const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) ?? "null") as Answer | null;
-      const today = new Date().toLocaleDateString("en-CA");
-      if (saved?.tonight?.date === today) {
+      const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) ?? "null") as Session | null;
+      if (saved?.date === new Date().toLocaleDateString("en-CA") && Array.isArray(saved.turns)) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- reading browser storage after the first render
-        setAnswer(saved);
-        setAsk(saved.ask);
+        setSession(saved);
+        setAsk(saved.turns[0]?.ask ?? "");
       }
     } catch {
       // Private browsing or nothing saved; start fresh.
@@ -52,30 +67,40 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
     return () => clearInterval(id);
   }, [pending]);
 
-  const submit = (text: string) => {
-    const question = text.trim();
-    if (question.length < 3) return;
+  const save = (next: Session | null) => {
+    setSession(next);
+    try {
+      if (next) sessionStorage.setItem(STORE_KEY, JSON.stringify(next));
+      else sessionStorage.removeItem(STORE_KEY);
+    } catch {
+      // Not saved; it just won't survive a trip to a recipe.
+    }
+  };
+
+  /** Asks with the earlier rounds (a reply) or without them (a fresh start). */
+  const send = (text: string, earlier: DinnerTurn[]) => {
+    const message = text.trim();
+    if (message.length < 3) return;
+    const turns = [...earlier, { ask: message, shown: [] }];
     startTransition(async () => {
       setError(null);
       setLine(0);
       try {
-        const result = await askForDinnerAction(question);
+        const result = await askForDinnerAction(turns);
         if ("error" in result) {
           setError(result.error);
           return;
         }
-        const next = { ask: question, ...result };
-        setAnswer(next);
-        try {
-          sessionStorage.setItem(STORE_KEY, JSON.stringify(next));
-        } catch {
-          // Not saved; it just won't survive a trip to the recipe.
-        }
+        turns[turns.length - 1] = { ask: message, shown: result.ideas.map((idea) => idea.slug) };
+        save({ date: result.tonight.date, turns, ideas: result.ideas, note: result.note });
+        setReply("");
       } catch {
         setError("That didn't work. Check your signal and try again.");
       }
     });
   };
+
+  const followUps = session?.turns.slice(1) ?? [];
 
   return (
     <Card className="mb-6 space-y-3 bg-gradient-to-br from-mustard-soft to-surface">
@@ -87,7 +112,7 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
         className="space-y-2"
         onSubmit={(e) => {
           e.preventDefault();
-          submit(ask);
+          send(ask, []);
         }}
       >
         <textarea
@@ -100,7 +125,7 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              submit(ask);
+              send(ask, []);
             }
           }}
         />
@@ -117,22 +142,28 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
             </button>
           ))}
           <Button type="submit" size="sm" disabled={pending || ask.trim().length < 3} className="ml-auto">
-            {pending ? "Thinking…" : "Find dinners"}
+            {pending && !session ? "Thinking…" : session ? "Start over with this" : "Find dinners"}
           </Button>
         </div>
       </form>
 
-      {pending ? <p className="text-sm text-muted">{THINKING[line % THINKING.length]}</p> : null}
-      {error ? <p className="text-sm font-semibold text-tomato-strong">{error}</p> : null}
-
-      {answer && !pending ? (
-        <div className="space-y-3 pt-1">
-          {answer.note ? <p className="text-sm">{answer.note}</p> : null}
-          {tonightTitle && answer.ideas.length ? (
+      {session ? (
+        <div className="space-y-3 border-t border-border/60 pt-3">
+          {followUps.length ? (
+            <ul className="space-y-1">
+              {followUps.map((turn, i) => (
+                <li key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-foreground px-3 py-1.5 text-sm text-background">
+                  {turn.ask}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {session.note ? <p className="text-sm">{session.note}</p> : null}
+          {tonightTitle && session.ideas.length ? (
             <p className="text-xs text-muted">Tonight is planned as {tonightTitle}; picking one of these replaces it.</p>
           ) : null}
-          <ul className="space-y-3">
-            {answer.ideas.map((idea, i) => (
+          <ul className={`space-y-3 ${pending ? "opacity-50" : ""}`}>
+            {session.ideas.map((idea, i) => (
               <li key={idea.id} className="flex gap-3 rounded-2xl bg-surface p-3">
                 <Link href={`/recipes/${idea.slug}`} className="shrink-0">
                   <RecipePicture
@@ -158,13 +189,67 @@ export function AskForDinner({ tonightTitle }: { tonightTitle: string | null }) 
                     {idea.totalMinutes - idea.activeMinutes >= 30 ? <Badge>{formatTotal(idea.totalMinutes)} total</Badge> : null}
                     <Badge>{idea.method}</Badge>
                   </div>
-                  <CookTonight recipeId={idea.id} date={answer.tonight.date} title={idea.title} />
+                  <CookTonight recipeId={idea.id} date={session.date} title={idea.title} />
                 </div>
               </li>
             ))}
           </ul>
+
+          <form
+            className="space-y-2 rounded-2xl bg-surface/70 p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send(reply, session.turns);
+            }}
+          >
+            <label className="block text-sm font-bold" htmlFor="dinner-reply">
+              Not quite? Tell it what to change
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="dinner-reply"
+                className={inputClass}
+                value={reply}
+                maxLength={500}
+                disabled={pending}
+                placeholder="e.g. We've had a lot of pasta lately, something different"
+                onChange={(e) => setReply(e.target.value)}
+              />
+              <Button type="submit" size="sm" disabled={pending || reply.trim().length < 3} className="shrink-0 self-center">
+                {pending ? "Thinking…" : "Send"}
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {NUDGES.map((n) => (
+                <button
+                  key={n.label}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => send(n.text, session.turns)}
+                  className="rounded-full border border-border bg-surface px-3 py-1 text-sm font-semibold text-muted hover:text-foreground disabled:opacity-60"
+                >
+                  {n.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  save(null);
+                  setAsk("");
+                  setError(null);
+                }}
+                className="ml-auto text-xs font-semibold text-muted underline"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
         </div>
       ) : null}
+
+      {pending ? <p className="text-sm text-muted">{THINKING[line % THINKING.length]}</p> : null}
+      {error ? <p className="text-sm font-semibold text-tomato-strong">{error}</p> : null}
     </Card>
   );
 }
