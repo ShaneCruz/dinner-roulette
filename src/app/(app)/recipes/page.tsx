@@ -3,13 +3,28 @@ import { RecipeCard } from "@/components/recipe-card";
 import { ButtonLink, PageHeader, cx, inputClass } from "@/components/ui";
 import { db } from "@/db";
 import { say } from "@/lib/copy";
-import { listRecipes } from "@/lib/recipes/store";
+import { getRecipe, listRecipes } from "@/lib/recipes/store";
+import { loadMeals } from "@/lib/plan/store";
+import { todayIn } from "@/lib/presence";
 import { requireActingMember } from "@/lib/session";
+import { aiEnabled } from "@/lib/ai/claude";
+import { AskForDinner } from "./ask-for-dinner";
 
 export const metadata = { title: "Recipes" };
 
+// Asking for dinner ideas waits on Claude for a few seconds.
+export const maxDuration = 60;
+
+/** What's on for tonight, so picking something else can say it replaces it. */
+async function tonightsDinner(timezone: string): Promise<string | null> {
+  const today = todayIn(timezone);
+  const tonight = (await loadMeals(db, today, today)).get(today);
+  if (tonight?.nightType !== "cook" || !tonight.recipeId || tonight.status === "skipped") return null;
+  return (await getRecipe(db, { id: tonight.recipeId }))?.title ?? null;
+}
+
 export default async function RecipesPage({ searchParams }: PageProps<"/recipes">) {
-  const { acting } = await requireActingMember();
+  const { acting, settings } = await requireActingMember();
   const params = await searchParams;
   const search = typeof params.q === "string" ? params.q : "";
   const kind = params.kind === "side" ? "side" : params.kind === "all" ? undefined : "main";
@@ -52,6 +67,10 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
           ) : null
         }
       />
+
+      {acting.role === "parent" && aiEnabled() && !archivedOnly ? (
+        <AskForDinner tonightTitle={await tonightsDinner(settings.timezone)} />
+      ) : null}
 
       <form className="mb-4" role="search">
         <input type="hidden" name={archivedOnly ? "show" : "kind"} value={archivedOnly ? "archived" : currentTab} />

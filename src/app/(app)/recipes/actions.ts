@@ -22,6 +22,10 @@ import {
   uniqueSlug,
 } from "@/lib/recipes/store";
 import { PageFetchError, fetchRecipePage } from "@/lib/ai/fetch-page";
+import { aiEnabled } from "@/lib/ai/claude";
+import { loadDinnerCandidates, recommendDinners } from "@/lib/ai/dinner-picks";
+import { recipePictureSrc } from "@/lib/recipes/picture";
+import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
 import { requireActingMember, requireParentMember } from "@/lib/session";
 import { z } from "zod";
 import { loadFamilyBrief } from "@/lib/ai/brief";
@@ -274,4 +278,59 @@ export async function findSourcePictureAction(recipeId: string): Promise<{ error
     return { error: error instanceof PageFetchError ? error.message : "Couldn't reach that page. Try again later." };
   }
   revalidatePath("/", "layout");
+}
+
+export type DinnerIdea = {
+  id: string;
+  slug: string;
+  title: string;
+  picture: string | null;
+  why: string;
+  tip: string | null;
+  activeMinutes: number;
+  totalMinutes: number;
+  method: string;
+};
+
+/**
+ * "What should we have tonight?" in the family's own words: picks from the
+ * recipe box that fit, skipping what they had lately.
+ */
+export async function askForDinnerAction(
+  request: string,
+): Promise<{ error: string } | { ideas: DinnerIdea[]; note: string | null; tonight: { date: string } }> {
+  const { settings } = await requireParentMember();
+  const ask = request.trim().slice(0, 500);
+  if (ask.length < 3) return { error: "Tell me a little about tonight first." };
+  if (!aiEnabled()) return { error: "AI isn't set up yet." };
+  const today = todayIn(settings.timezone);
+  try {
+    const [candidates, brief] = await Promise.all([loadDinnerCandidates(db, today), loadFamilyBrief(db)]);
+    if (!candidates.length) return { error: "Add a few dinners to the recipe box first." };
+    const { picks, note } = await recommendDinners(ask, candidates, today, brief, settings.dinnerTime);
+    const bySlug = new Map(candidates.map((c) => [c.slug, c]));
+    const rows = await listRecipes(db);
+    const pictures = new Map(rows.map((r) => [r.id, recipePictureSrc(r)]));
+    return {
+      ideas: picks.map((p) => {
+        const c = bySlug.get(p.slug)!;
+        return {
+          id: c.id,
+          slug: c.slug,
+          title: c.title,
+          picture: pictures.get(c.id) ?? null,
+          why: p.why,
+          tip: p.tip,
+          activeMinutes: c.activeMinutes,
+          totalMinutes: c.totalMinutes,
+          method: COOK_METHOD_LABELS[c.method],
+        };
+      }),
+      note: picks.length ? note : note ?? "Nothing in the recipe box fits that. Try loosening it a little.",
+      tonight: { date: today },
+    };
+  } catch (error) {
+    console.error("Dinner ideas failed", error);
+    return { error: friendlyAiError(error) };
+  }
 }
