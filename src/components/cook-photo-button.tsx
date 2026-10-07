@@ -14,12 +14,15 @@ export function CookPhotoButton({
   recipeId,
   mealId = null,
   label = "📸 Add a photo of it",
+  compact = false,
   className,
 }: {
   recipeId: string;
   /** The planned dinner it belongs to, so it's dated that night */
   mealId?: string | null;
   label?: string;
+  /** Just a camera, for tight rows */
+  compact?: boolean;
   className?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -43,7 +46,9 @@ export function CookPhotoButton({
               const form = new FormData();
               form.set("photo", await shrinkImage(file, 1400));
               const result = await addCookPhotoAction(recipeId, mealId, form);
-              setStatus(result?.error ? { ok: false, text: result.error } : { ok: true, text: "📸 Saved. Looking good, chef." });
+              setStatus(
+                result?.error ? { ok: false, text: result.error } : { ok: true, text: compact ? "✓ Saved" : "📸 Saved. Looking good, chef." },
+              );
             } catch {
               setStatus({ ok: false, text: "That didn't save. Check your signal and try again." });
             }
@@ -54,12 +59,15 @@ export function CookPhotoButton({
         type="button"
         disabled={pending}
         onClick={() => input.current?.click()}
+        aria-label={compact ? "Add a photo of this dinner" : undefined}
         className={cx(
-          "rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold hover:bg-surface-muted disabled:opacity-60",
+          compact
+            ? "h-9 w-9 rounded-full bg-surface text-lg hover:bg-border disabled:opacity-60"
+            : "rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold hover:bg-surface-muted disabled:opacity-60",
           className,
         )}
       >
-        {pending ? "Saving the photo…" : label}
+        {pending ? (compact ? "…" : "Saving the photo…") : compact ? "📸" : label}
       </button>
       {status ? <span className={cx("text-sm", status.ok ? "text-basil" : "text-tomato-strong")}>{status.text}</span> : null}
     </span>

@@ -5,7 +5,7 @@ import { CookPhotoButton } from "@/components/cook-photo-button";
 import { Card } from "@/components/ui";
 import { formatDay } from "@/lib/plan/week";
 import { cookPhotoSrc } from "@/lib/recipes/picture";
-import { deleteCookPhotoAction, makeCookPhotoMainAction } from "../actions";
+import { deleteCookPhotoAction, makeCookPhotoMainAction, redateCookPhotoAction } from "../actions";
 
 type Make = { id: string; madeOn: string; who: string | null; memberId: string | null };
 
@@ -15,13 +15,19 @@ export function MadeGallery({
   makes,
   actingId,
   isParent,
+  recentNight,
+  today,
 }: {
   recipeId: string;
   makes: Make[];
   actingId: string;
   isParent: boolean;
+  /** The latest night it was on the plan, so a new photo is dated that night */
+  recentNight: { id: string; date: string } | null;
+  today: string;
 }) {
   const [open, setOpen] = useState<Make | null>(null);
+  const [newDate, setNewDate] = useState("");
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -54,14 +60,25 @@ export function MadeGallery({
               : "Snap it next time it's on the table, and it shows up here."}
           </p>
         </div>
-        <CookPhotoButton recipeId={recipeId} />
+        <CookPhotoButton
+          recipeId={recipeId}
+          mealId={recentNight?.id ?? null}
+          label={recentNight && recentNight.date !== today ? `📸 Add a photo from ${formatDay(recentNight.date)}` : "📸 Add a photo of it"}
+        />
       </div>
       {message ? <p className="text-sm text-muted">{message}</p> : null}
       {makes.length ? (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           {makes.map((make) => (
             <li key={make.id}>
-              <button type="button" onClick={() => setOpen(make)} className="block w-full text-left">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(make);
+                  setNewDate(make.madeOn);
+                }}
+                className="block w-full text-left"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element -- the family's own photos, already small */}
                 <img
                   src={cookPhotoSrc(make.id)}
@@ -101,6 +118,28 @@ export function MadeGallery({
                 >
                   Use as the main photo
                 </button>
+              ) : null}
+              {isParent || open.memberId === actingId ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="sr-only">Made on</span>
+                  <input
+                    type="date"
+                    value={newDate}
+                    max={today}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="rounded-full bg-white px-3 py-1.5 text-sm text-foreground"
+                  />
+                  {newDate && newDate !== open.madeOn ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => act(() => redateCookPhotoAction(open.id, newDate), `Moved to ${formatDay(newDate)}.`)}
+                      className="rounded-full bg-white px-3 py-1.5 font-semibold text-foreground disabled:opacity-60"
+                    >
+                      Save date
+                    </button>
+                  ) : null}
+                </label>
               ) : null}
               {isParent || open.memberId === actingId ? (
                 <button

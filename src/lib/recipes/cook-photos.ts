@@ -1,7 +1,8 @@
 import "server-only";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import type { Database } from "@/db";
-import { cookPhoto, member } from "@/db/schema";
+import { cookPhoto, member, plannedMeal } from "@/db/schema";
+import { addDays } from "@/lib/presence";
 import { saveRecipePhoto } from "./store";
 
 /** A photo in a recipe's log of makes, without its bytes. */
@@ -59,4 +60,28 @@ export async function promoteCookPhoto(db: Database, id: string): Promise<string
   if (!photo) return null;
   await saveRecipePhoto(db, photo.recipeId, { contentType: photo.contentType, data: photo.data });
   return photo.recipeId;
+}
+
+/** Re-dates a photo (taken the morning after, say), linking it to that night's dinner if the dish was on it. */
+export async function redateCookPhoto(db: Database, id: string, madeOn: string) {
+  const photo = await getCookPhoto(db, id);
+  if (!photo) return false;
+  const [meal] = await db
+    .select({ id: plannedMeal.id, recipeId: plannedMeal.recipeId, sideRecipeIds: plannedMeal.sideRecipeIds })
+    .from(plannedMeal)
+    .where(eq(plannedMeal.date, madeOn));
+  const onThatNight = meal && (meal.recipeId === photo.recipeId || meal.sideRecipeIds.includes(photo.recipeId));
+  await db.update(cookPhoto).set({ madeOn, plannedMealId: onThatNight ? meal.id : null }).where(eq(cookPhoto.id, id));
+  return true;
+}
+
+/** The latest night in the last two weeks the dish was on the plan, so a photo added from the recipe gets that date. */
+export async function recentPlannedNight(db: Database, recipeId: string, today: string) {
+  const rows = await db
+    .select({ id: plannedMeal.id, date: plannedMeal.date, recipeId: plannedMeal.recipeId, sideRecipeIds: plannedMeal.sideRecipeIds })
+    .from(plannedMeal)
+    .where(and(eq(plannedMeal.nightType, "cook"), ne(plannedMeal.status, "skipped"), gte(plannedMeal.date, addDays(today, -14)), lte(plannedMeal.date, today)))
+    .orderBy(desc(plannedMeal.date));
+  const found = rows.find((m) => m.recipeId === recipeId || m.sideRecipeIds.includes(recipeId));
+  return found ? { id: found.id, date: found.date } : null;
 }

@@ -29,6 +29,7 @@ import {
   addSideAction,
 } from "./actions";
 import { RecipePicker } from "./recipe-picker";
+import { CookPhotoButton } from "@/components/cook-photo-button";
 
 export type BoardMember = { id: string; name: string; emoji: string; color: string };
 type Bumped = { id: string; fromDate: string; title: string; slug: string };
@@ -303,21 +304,23 @@ function NightCard({
     card.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [isToday]);
 
+  // A dinner that's been (or is being) made can get a photo, dated that night.
+  const photographable = cooking && Boolean(recipe) && Boolean(night.mealId) && night.status !== "skipped" && (isPast || isToday);
+
   // Past nights shrink to one line; tap to open them back up.
   if (isPast && !expanded) {
     const label = !cooking
       ? `${NIGHT_TYPES[night.nightType].emoji} ${NIGHT_TYPES[night.nightType].label}`
       : recipe?.title ?? "Nothing planned";
     return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="flex w-full items-center gap-3 rounded-3xl border border-border bg-surface-muted px-5 py-3 text-left"
-      >
-        <span className="w-24 shrink-0 text-sm font-bold text-muted">{formatDay(night.date)}</span>
-        <span className={cx("flex-1 truncate", night.status === "skipped" && "line-through")}>{label}</span>
-        {night.status === "cooked" ? <Badge tone="basil">✓</Badge> : null}
-      </button>
+      <div className="flex w-full items-center gap-2 rounded-3xl border border-border bg-surface-muted py-1.5 pl-5 pr-2">
+        <button type="button" onClick={() => setExpanded(true)} className="flex min-w-0 flex-1 items-center gap-3 py-1.5 text-left">
+          <span className="w-24 shrink-0 text-sm font-bold text-muted">{formatDay(night.date)}</span>
+          <span className={cx("flex-1 truncate", night.status === "skipped" && "line-through")}>{label}</span>
+          {night.status === "cooked" ? <Badge tone="basil">✓</Badge> : null}
+        </button>
+        {photographable ? <CookPhotoButton recipeId={recipe!.id} mealId={night.mealId} compact /> : null}
+      </div>
     );
   }
 
@@ -472,6 +475,11 @@ function NightCard({
               <Link href={`/rate/${night.mealId}`} className="mt-2 inline-block text-sm font-semibold text-tomato">
                 ⭐ Rate it
               </Link>
+            ) : null}
+            {photographable ? (
+              <div className="mt-2">
+                <CookPhotoButton recipeId={recipe.id} mealId={night.mealId} label="📸 Add a photo" />
+              </div>
             ) : null}
           </div>
         ) : canEdit || spinnable ? (

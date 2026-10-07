@@ -26,7 +26,7 @@ import { aiEnabled } from "@/lib/ai/claude";
 import { loadDinnerCandidates, recommendDinners, startTiming, type DinnerTurn } from "@/lib/ai/dinner-picks";
 import { minutesIn } from "@/lib/reminders";
 import { cookPhotoSrc, recipePictureSrc } from "@/lib/recipes/picture";
-import { addCookPhoto, deleteCookPhoto, getCookPhoto, latestCookPhotos, promoteCookPhoto } from "@/lib/recipes/cook-photos";
+import { addCookPhoto, deleteCookPhoto, getCookPhoto, latestCookPhotos, promoteCookPhoto, redateCookPhoto } from "@/lib/recipes/cook-photos";
 import { plannedMeal } from "@/db/schema";
 import { COOK_METHOD_LABELS } from "@/lib/recipes/schema";
 import { scheduleOn } from "@/lib/sports/store";
@@ -423,5 +423,17 @@ export async function makeCookPhotoMainAction(id: string): Promise<{ error: stri
   await requireParentMember();
   if (!z.uuid().safeParse(id).success) return { error: "Unknown photo." };
   if (!(await promoteCookPhoto(db, id))) return { error: "That photo is gone." };
+  revalidatePath("/", "layout");
+}
+
+/** Fixes the date on a photo: parents for any, everyone else their own. Not in the future. */
+export async function redateCookPhotoAction(id: string, madeOn: string): Promise<{ error: string } | void> {
+  const { acting, settings } = await requireActingMember();
+  if (!z.uuid().safeParse(id).success || !/^\d{4}-\d{2}-\d{2}$/.test(madeOn)) return { error: "Pick a date." };
+  if (madeOn > todayIn(settings.timezone)) return { error: "That date hasn't happened yet." };
+  const photo = await getCookPhoto(db, id);
+  if (!photo) return { error: "That photo is gone." };
+  if (acting.role !== "parent" && photo.memberId !== acting.id) return { error: "Only a parent can change someone else's photo." };
+  await redateCookPhoto(db, id, madeOn);
   revalidatePath("/", "layout");
 }

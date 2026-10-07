@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/db";
 import { member } from "@/db/schema";
 import { createTestDatabase } from "@/test/db";
-import { addCookPhoto, deleteCookPhoto, latestCookPhotos, listCookPhotos, promoteCookPhoto } from "./cook-photos";
+import { addCookPhoto, deleteCookPhoto, latestCookPhotos, listCookPhotos, promoteCookPhoto, recentPlannedNight, redateCookPhoto } from "./cook-photos";
+import { saveNight } from "@/lib/plan/store";
 import { seedStarterRecipes } from "./seed";
 import { getRecipe, getRecipePhoto } from "./store";
 
@@ -58,5 +59,23 @@ describe("photos of the dish as made", () => {
     expect((await listCookPhotos(db, tacosId)).map((m) => m.madeOn)).toEqual(["2026-09-01"]);
     // The promoted copy stays as the main picture
     expect((await getRecipePhoto(db, tacosId))?.data).toBe("BBB");
+  });
+});
+
+describe("dating a photo taken after the fact", () => {
+  it("finds the night the dish was last on the plan", async () => {
+    await saveNight(db, "2026-10-05", 0, { recipeId: tacosId });
+    await saveNight(db, "2026-10-06", 0, { recipeId: riceId });
+    expect((await recentPlannedNight(db, tacosId, "2026-10-07"))?.date).toBe("2026-10-05");
+    // Too long ago, or not yet, doesn't count
+    expect(await recentPlannedNight(db, tacosId, "2026-11-01")).toBeNull();
+    expect(await recentPlannedNight(db, tacosId, "2026-10-04")).toBeNull();
+  });
+
+  it("moves a photo to the night it was really made, and links that dinner", async () => {
+    const id = await addCookPhoto(db, photo("2026-10-07", "CCC"));
+    await redateCookPhoto(db, id, "2026-10-05");
+    const moved = (await listCookPhotos(db, tacosId)).find((m) => m.id === id)!;
+    expect(moved.madeOn).toBe("2026-10-05");
   });
 });
