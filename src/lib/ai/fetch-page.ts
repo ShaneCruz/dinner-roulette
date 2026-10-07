@@ -82,17 +82,31 @@ function httpsUrl(value: unknown): string | null {
   return /^https?:\/\//i.test(trimmed) && trimmed.length <= 1000 ? trimmed.replace(/^http:/i, "https:") : null;
 }
 
+/** How big a picture is: from an ImageObject's width, or a "-225x225" size in its file name. */
+function imageSize(url: string, width: unknown): number {
+  const declared = Number(width);
+  if (Number.isFinite(declared) && declared > 0) return declared;
+  const named = url.match(/[-_](\d{2,4})x(\d{2,4})(?=\.(jpe?g|png|webp)\b)/i);
+  // No size in the name usually means the full-size original.
+  return named ? Number(named[1]) : 1200;
+}
+
 /**
  * The recipe's picture from schema.org data, which comes as a URL, a list of
- * them, an ImageObject, or a list of those. Sites list the biggest first.
+ * them, an ImageObject, or a list of those. Sites often list several sizes,
+ * smallest first as often as not, so take the biggest.
  */
 export function imageFromJsonLd(recipe: Record<string, unknown>): string | null {
   const image = recipe.image;
+  let best: { url: string; size: number } | null = null;
   for (const item of Array.isArray(image) ? image : [image]) {
-    const url = httpsUrl(item) ?? (item && typeof item === "object" ? httpsUrl((item as { url?: unknown }).url) : null);
-    if (url) return url;
+    const object = item && typeof item === "object" ? (item as { url?: unknown; contentUrl?: unknown; width?: unknown }) : null;
+    const url = httpsUrl(item) ?? (object ? httpsUrl(object.url) ?? httpsUrl(object.contentUrl) : null);
+    if (!url) continue;
+    const size = imageSize(url, object?.width);
+    if (!best || size > best.size) best = { url, size };
   }
-  return null;
+  return best?.url ?? null;
 }
 
 /** The page's share picture (og:image), for sites without recipe data. */

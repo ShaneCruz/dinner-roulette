@@ -19,7 +19,7 @@ export default async function DiscoverPage() {
       <Link href="/recipes" className="text-sm font-semibold text-muted hover:text-foreground">
         ← Recipes
       </Link>
-      <PageHeader title="Discover dinners 💘" subtitle="Swipe right on anything your family would eat. We'll write the recipe and add it." />
+      <PageHeader title="Discover dinners 💘" subtitle="Swipe right on anything your family would eat. We'll find a real, well-rated recipe for it, photo and all, and add it." />
       {aiEnabled() ? (
         <DiscoverDeck
           initialIdeas={ideas.map((i) => ({

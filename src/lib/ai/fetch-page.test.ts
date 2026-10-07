@@ -54,7 +54,14 @@ describe("source ratings", () => {
 describe("recipe pictures", () => {
   it("reads every shape schema.org uses for an image", () => {
     expect(imageFromJsonLd({ image: "https://a.com/1.jpg" })).toBe("https://a.com/1.jpg");
-    expect(imageFromJsonLd({ image: ["https://a.com/big.jpg", "https://a.com/small.jpg"] })).toBe("https://a.com/big.jpg");
+    expect(imageFromJsonLd({ image: ["https://a.com/big.jpg", "https://a.com/small-300x300.jpg"] })).toBe("https://a.com/big.jpg");
+    // WordPress lists thumbnails first
+    expect(
+      imageFromJsonLd({ image: ["https://a.com/dish-225x225.jpg", "https://a.com/dish-1200x800.jpg", "https://a.com/dish-720x540.jpg"] }),
+    ).toBe("https://a.com/dish-1200x800.jpg");
+    expect(
+      imageFromJsonLd({ image: [{ url: "https://a.com/s.jpg", width: 300 }, { url: "https://a.com/l.jpg", width: 1500 }] }),
+    ).toBe("https://a.com/l.jpg");
     expect(imageFromJsonLd({ image: { "@type": "ImageObject", url: "https://a.com/2.jpg", width: 1500 } })).toBe("https://a.com/2.jpg");
     expect(imageFromJsonLd({ image: [{ url: "https://a.com/3.jpg" }] })).toBe("https://a.com/3.jpg");
     expect(imageFromJsonLd({ image: "http://a.com/4.jpg" })).toBe("https://a.com/4.jpg");

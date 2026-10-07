@@ -4,7 +4,7 @@ import type { Database } from "@/db";
 import { recipe, recipeIdea } from "@/db/schema";
 import { loadFamilyBrief } from "@/lib/ai/brief";
 import { AiBudgetError } from "@/lib/ai/errors";
-import { suggestDinnerIdeas, writeIdeaRecipe } from "@/lib/ai/ideas";
+import { importIdeaFromWeb, suggestDinnerIdeas, writeIdeaRecipe } from "@/lib/ai/ideas";
 import { ensureNutrition } from "@/lib/nutrition-store";
 import { season } from "@/lib/suggest/engine";
 import { saveRecipe, slugify, uniqueSlug } from "./store";
@@ -75,11 +75,21 @@ export async function writeAcceptedIdea(db: Database, id: string): Promise<void>
   if (!idea || idea.status !== "writing") return;
   try {
     const brief = await loadFamilyBrief(db);
-    const written = await writeIdeaRecipe(idea, brief);
+    // A real published recipe first, for its picture, rating and link back;
+    // writing one from scratch is the fallback.
+    const fromWeb = await importIdeaFromWeb(idea, brief).catch((error) => {
+      if (error instanceof AiBudgetError) throw error;
+      console.error("Finding a real recipe for an idea failed", error);
+      return null;
+    });
+    const written = fromWeb ?? (await writeIdeaRecipe(idea, brief));
     if (!written) throw new Error("No recipe came back.");
     const slug = await uniqueSlug(db, slugify(written.recipe.title));
     const recipeId = await saveRecipe(db, { ...written.recipe, slug }, {
-      source: "ai",
+      source: fromWeb ? "import" : "ai",
+      sourceUrl: fromWeb?.sourceUrl ?? null,
+      imageUrl: fromWeb?.imageUrl ?? null,
+      sourceRating: fromWeb?.rating ?? null,
       status: "approved",
       notes: [`Added from Discover.${idea.kidAppeal ? ` ${idea.kidAppeal}` : ""}`, written.notes].filter(Boolean).join("\n\n"),
       createdByMemberId: idea.decidedByMemberId,

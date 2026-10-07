@@ -200,7 +200,7 @@ export function DiscoverDeck({ initialIdeas, recent: saved }: { initialIdeas: Id
                 )}
                 <span className="ml-auto text-xs text-muted">
                   {r.status === "writing" ? (
-                    "✍️ writing the recipe…"
+                    "🔎 finding the recipe…"
                   ) : r.status === "added" ? (
                     "✓ in your recipes"
                   ) : (
